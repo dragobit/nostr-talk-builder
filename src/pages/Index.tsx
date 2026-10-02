@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChatLogView } from "@/components/talklog/ChatLogView";
 import { ThreadTreeView } from "@/components/talklog/ThreadTreeView";
 import { TextDumpView } from "@/components/talklog/TextDumpView";
+import { IssueHistoryView } from "@/components/talklog/IssueHistoryView";
 import { IssueDialog } from "@/components/talkscript/IssueDialog";
 import { useTalkScript } from "@/hooks/useTalkScript";
 import { toast } from "@/hooks/useToast";
@@ -123,7 +124,11 @@ const Index = () => {
           <Button variant="outline" size="sm" onClick={t.newScript}>
             新規台本
           </Button>
-          <Button size="sm" onClick={t.signAll} disabled={!signable || !t.compiled}>
+          <Button
+            size="sm"
+            onClick={t.signAll}
+            disabled={!signable || !t.compiled}
+          >
             一括署名
           </Button>
           <Button
@@ -177,6 +182,7 @@ const Index = () => {
               <TabsTrigger value="chat">チャット</TabsTrigger>
               <TabsTrigger value="tree">ツリー</TabsTrigger>
               <TabsTrigger value="dump">ダンプ</TabsTrigger>
+              <TabsTrigger value="history">履歴</TabsTrigger>
             </TabsList>
             <TabsContent value="chat">
               <ChatLogView
@@ -194,6 +200,9 @@ const Index = () => {
             </TabsContent>
             <TabsContent value="dump">
               <TextDumpView compiled={t.compiled} />
+            </TabsContent>
+            <TabsContent value="history">
+              <IssueHistoryView issues={t.script.issues} />
             </TabsContent>
           </Tabs>
           <p className="text-xs text-muted-foreground px-1">

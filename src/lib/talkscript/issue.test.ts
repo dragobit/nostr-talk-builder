@@ -1,22 +1,23 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { NostrEvent } from "nostr-tools";
+import { nip19, type NostrEvent } from "nostr-tools";
 import {
   aggregateResults,
   createIssueRecord,
   dedupeRelays,
   DEFAULT_PUBLISH_RELAYS,
+  getIssuePreset,
+  ISSUE_PRESETS,
   isValidRelayUrl,
+  issueLinks,
   loadPublishRelays,
   normalizeRelayInput,
   publishToRelays,
   RELAY_STORAGE_KEY,
   savePublishRelays,
+  type IssuePreset,
   type PublishOutcome,
 } from "./issue";
-import {
-  deserializeTalkScript,
-  serializeTalkScript,
-} from "./persist";
+import { deserializeTalkScript, serializeTalkScript } from "./persist";
 import { TALK_SCRIPT_VERSION, type TalkScript } from "./types";
 
 const KEY_A = "a".repeat(64);
@@ -56,9 +57,7 @@ describe("IssueRecord persistence", () => {
   });
 
   it("accepts scripts with no issues field (additive optional)", () => {
-    const restored = deserializeTalkScript(
-      serializeTalkScript(fixture()),
-    );
+    const restored = deserializeTalkScript(serializeTalkScript(fixture()));
     expect(restored.issues).toBeUndefined();
   });
 
@@ -247,5 +246,76 @@ describe("createIssueRecord", () => {
     expect(rec.envelope).toBe("plain");
     expect(rec.relays).toEqual(["wss://nos.lol"]);
     expect(rec.results).toEqual({ ev1: "ok" });
+    expect(rec.rootId).toBeUndefined();
+  });
+
+  it("stores the optional rootId", () => {
+    const rec = createIssueRecord({
+      preset: "public-plain",
+      relays: ["wss://nos.lol"],
+      rootId: "f".repeat(64),
+      results: { ev1: "ok" },
+    });
+    expect(rec.rootId).toBe("f".repeat(64));
+  });
+});
+
+describe("ISSUE_PRESETS", () => {
+  it("describes every preset on the 3 issuance axes", () => {
+    for (const preset of Object.values(ISSUE_PRESETS)) {
+      expect(preset.envelope).toBe("plain");
+      expect(Array.isArray(preset.bindings)).toBe(true);
+      expect(Array.isArray(preset.clientLinks)).toBe(true);
+    }
+    expect(ISSUE_PRESETS["public-plain"].clientLinks[0].urlTemplate).toContain(
+      "{nevent}",
+    );
+  });
+
+  it("offers at least one disabled preset announcing future work", () => {
+    const disabled = Object.values(ISSUE_PRESETS).filter(
+      (p: IssuePreset) => p.disabledReason !== undefined,
+    );
+    expect(disabled.length).toBeGreaterThan(0);
+    for (const p of disabled) expect(p.publishes).toBe(false);
+  });
+
+  it("getIssuePreset returns undefined for unknown ids", () => {
+    expect(getIssuePreset("public-plain")?.label).toBeTruthy();
+    expect(getIssuePreset("no-such-preset")).toBeUndefined();
+  });
+});
+
+describe("issueLinks", () => {
+  const rootId = "f".repeat(64);
+  const relays = ["wss://nos.lol/", "wss://nostr.mom/"];
+
+  it("builds an njump link whose nevent restores id + relays", () => {
+    const links = issueLinks({ preset: "public-plain", relays, rootId });
+    expect(links).toHaveLength(1);
+    expect(links[0].label).toBe("njump で開く");
+    const nevent = links[0].url.replace("https://njump.me/", "");
+    expect(nevent.startsWith("nevent1")).toBe(true);
+    const decoded = nip19.decode(nevent);
+    expect(decoded.type).toBe("nevent");
+    if (decoded.type !== "nevent") throw new Error("unreachable");
+    expect(decoded.data.id).toBe(rootId);
+    expect(decoded.data.relays).toEqual(relays);
+  });
+
+  it("substitutes {nevent} into the preset's urlTemplate", () => {
+    const links = issueLinks({ preset: "public-plain", relays, rootId });
+    const expected = nip19.neventEncode({ id: rootId, relays });
+    expect(links[0].url).toBe(`https://njump.me/${expected}`);
+  });
+
+  it("falls back to njump for unknown preset ids", () => {
+    const links = issueLinks({ preset: "future-preset", relays, rootId });
+    expect(links).toHaveLength(1);
+    expect(links[0].url).toMatch(/^https:\/\/njump\.me\/nevent1/);
+  });
+
+  it("returns no links without a rootId", () => {
+    expect(issueLinks({ preset: "public-plain", relays })).toEqual([]);
   });
 });

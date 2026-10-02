@@ -1,4 +1,5 @@
 import type { NostrEvent } from "nostr-tools";
+import { nip19 } from "nostr-tools";
 import type { PublishResponse } from "applesauce-relay";
 import { normalizeURL } from "applesauce-core/helpers";
 
@@ -12,29 +13,68 @@ export const RELAY_STORAGE_KEY = "nostr-talk-builder:relays:v1";
  */
 export const DEFAULT_PUBLISH_RELAYS = ["wss://nos.lol/", "wss://nostr.mom/"];
 
+/** A link offered to the user after issuance: label + url template. */
+export interface ClientLink {
+  /** e.g. "njump で開く" */
+  label: string;
+  /** Template containing a {nevent} placeholder for the issued root. */
+  urlTemplate: string;
+}
+
 export interface IssuePreset {
   label: string;
   description: string;
   /** false = no-op placeholder preset: nothing is sent to relays. */
   publishes: boolean;
+  /** Binding axis — all presets are unbound in M3b; M4 adds "h" etc. */
+  bindings: string[];
+  /** Envelope axis — "plain" only in M3b; M4 adds "nip59" / "concord". */
+  envelope: "plain";
+  /** Expected-client links offered after a successful publish. */
+  clientLinks: ClientLink[];
+  /** Set to render the preset unselectable (announces future presets). */
+  disabledReason?: string;
 }
 
-/** Issue presets shipped in M3a; ids are stored on IssueRecord.preset. */
+/** Issue presets; ids are stored on IssueRecord.preset. */
 export const ISSUE_PRESETS = {
   "public-plain": {
     label: "既存クライアント用（平文＋公開リレー）",
     description: "署名済みイベントを下記リレーに平文のまま送信します。",
     publishes: true,
+    bindings: [],
+    envelope: "plain",
+    clientLinks: [
+      { label: "njump で開く", urlTemplate: "https://njump.me/{nevent}" },
+    ],
   },
   "app-only": {
     label: "アプリ内のみ",
     description:
       "何も送信されません。署名済みイベントはアプリ内 EventStore にのみ保持されます。",
     publishes: false,
+    bindings: [],
+    envelope: "plain",
+    clientLinks: [],
+  },
+  "h-bind": {
+    label: "NIP-29 グループ向け (h 束縛)",
+    description:
+      "kind 11/1111 に h タグを付けて NIP-29 グループへ束縛して発行します。",
+    publishes: false,
+    bindings: ["h"],
+    envelope: "plain",
+    clientLinks: [],
+    disabledReason: "M4 で実装予定",
   },
 } as const satisfies Record<string, IssuePreset>;
 
 export type IssuePresetId = keyof typeof ISSUE_PRESETS;
+
+/** Look up a preset by id; undefined for ids stored by future versions. */
+export function getIssuePreset(presetId: string): IssuePreset | undefined {
+  return (ISSUE_PRESETS as Record<string, IssuePreset>)[presetId];
+}
 
 /** One issuance attempt: the signed IR offered to a relay set. */
 export interface IssueRecord {
@@ -48,6 +88,8 @@ export interface IssueRecord {
   envelope: "plain";
   /** Relays the signed events were offered to. */
   relays: string[];
+  /** kind 11 root event id at issue time (survives later script edits). */
+  rootId?: string;
   /** event id -> "ok" or a failure reason. */
   results: Record<string, "ok" | string>;
 }
@@ -196,6 +238,8 @@ export function aggregateResults(
 export function createIssueRecord(input: {
   preset: string;
   relays: string[];
+  /** kind 11 root event id, when the root was part of the publish. */
+  rootId?: string;
   results: Record<string, "ok" | string>;
 }): IssueRecord {
   return {
@@ -205,6 +249,41 @@ export function createIssueRecord(input: {
     bindings: [],
     envelope: "plain",
     relays: [...input.relays],
+    ...(input.rootId ? { rootId: input.rootId } : {}),
     results: { ...input.results },
   };
+}
+
+/** Fallback for presets without clientLinks (and unknown preset ids):
+ * the IR is standard kind 11/1111, so any generic viewer can read it. */
+const NJUMP_LINK: ClientLink = {
+  label: "njump で開く",
+  urlTemplate: "https://njump.me/{nevent}",
+};
+
+export interface ResolvedClientLink {
+  label: string;
+  url: string;
+}
+
+/**
+ * Resolve the preset's client links for an issued record: the root's
+ * nevent (relays hinted with the ones it was published to) is substituted
+ * into each urlTemplate. Unknown preset ids and presets without links
+ * fall back to njump. Returns [] when the record has no rootId.
+ */
+export function issueLinks(
+  record: Pick<IssueRecord, "rootId" | "relays" | "preset">,
+): ResolvedClientLink[] {
+  if (!record.rootId) return [];
+  const nevent = nip19.neventEncode({
+    id: record.rootId,
+    relays: record.relays,
+  });
+  const links = getIssuePreset(record.preset)?.clientLinks ?? [NJUMP_LINK];
+  const templates = links.length > 0 ? links : [NJUMP_LINK];
+  return templates.map((link) => ({
+    label: link.label,
+    url: link.urlTemplate.replace("{nevent}", nevent),
+  }));
 }
