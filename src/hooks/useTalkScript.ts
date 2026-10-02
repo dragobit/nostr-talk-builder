@@ -4,6 +4,7 @@ import { loadStoredScript, saveStoredScript } from "@/lib/talkscript/persist";
 import { signTalk } from "@/lib/talkscript/sign";
 import { createSampleScript, newId } from "@/lib/talkscript/sample";
 import { generateSecretKeyNsec } from "@/lib/talkscript/keys";
+import type { IssueRecord } from "@/lib/talkscript/issue";
 import type { CompiledTalk, Persona, ScriptLine, TalkScript } from "@/lib/talkscript/types";
 import { eventStore } from "@/services/nostr";
 
@@ -25,6 +26,8 @@ export interface TalkScriptState {
   moveLine: (id: string, dir: -1 | 1) => void;
   newScript: () => void;
   importScript: (script: TalkScript) => void;
+  /** Append an issuance receipt to script.issues (M3a). */
+  addIssueRecord: (record: IssueRecord) => void;
   /** Set when a persisted script failed validation and was discarded. */
   restoreError: string | null;
 }
@@ -170,6 +173,11 @@ export function useTalkScript(): TalkScriptState {
     setRestoreError(null);
   };
 
+  // Deliberately not via update(): an issue receipt must not clear
+  // skippedCount, which describes the last signing run.
+  const addIssueRecord = (record: IssueRecord) =>
+    setScript((s) => ({ ...s, issues: [...(s.issues ?? []), record] }));
+
   return {
     script,
     compiled,
@@ -187,6 +195,7 @@ export function useTalkScript(): TalkScriptState {
     moveLine,
     newScript,
     importScript,
+    addIssueRecord,
     restoreError,
   };
 }
