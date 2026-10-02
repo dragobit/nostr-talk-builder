@@ -112,6 +112,31 @@ export const ISSUE_PRESETS = {
       { label: "Snort で開く", urlTemplate: "https://snort.social/e/{nevent}" },
     ],
   },
+  "ditto-plain": {
+    label: "ditto 用（平文＋公開リレー）",
+    description:
+      "署名済みイベントを下記リレーに平文のまま送信します。ditto は kind 11 ルートと kind 1111 コメントをスレッドとして一体表示します。",
+    publishes: true,
+    bindings: [],
+    envelope: "plain",
+    clientLinks: [
+      { label: "ditto で開く", urlTemplate: "https://ditto.pub/{nevent}" },
+    ],
+  },
+  "grimoire-plain": {
+    label: "grimoire 用（平文＋公開リレー）",
+    description:
+      "署名済みイベントを下記リレーに平文のまま送信します。grimoire はルートを単独イベントとしてプレビュー表示しますが、kind 1111 コメントは表示しません。",
+    publishes: true,
+    bindings: [],
+    envelope: "plain",
+    clientLinks: [
+      {
+        label: "grimoire で開く",
+        urlTemplate: "https://grimoire.rocks/{nevent}",
+      },
+    ],
+  },
   "app-only": {
     label: "アプリ内のみ",
     description:
