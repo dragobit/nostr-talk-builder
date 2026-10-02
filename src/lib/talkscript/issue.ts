@@ -56,7 +56,10 @@ export const ISSUE_PRESETS = {
     bindings: [],
     envelope: "plain",
     clientLinks: [
-      { label: "Coracle で開く", urlTemplate: "https://coracle.social/notes/{nevent}" },
+      {
+        label: "Coracle で開く",
+        urlTemplate: "https://coracle.social/notes/{nevent}",
+      },
     ],
   },
   "iris-plain": {
@@ -78,7 +81,10 @@ export const ISSUE_PRESETS = {
     bindings: [],
     envelope: "plain",
     clientLinks: [
-      { label: "Jumble で開く", urlTemplate: "https://jumble.social/notes/{nevent}" },
+      {
+        label: "Jumble で開く",
+        urlTemplate: "https://jumble.social/notes/{nevent}",
+      },
     ],
   },
   "nostrudel-plain": {
@@ -89,7 +95,10 @@ export const ISSUE_PRESETS = {
     bindings: [],
     envelope: "plain",
     clientLinks: [
-      { label: "noStrudel で開く", urlTemplate: "https://nostrudel.ninja/n/{nevent}" },
+      {
+        label: "noStrudel で開く",
+        urlTemplate: "https://nostrudel.ninja/n/{nevent}",
+      },
     ],
   },
   "snort-plain": {
