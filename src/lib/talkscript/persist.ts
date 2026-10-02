@@ -21,6 +21,16 @@ const scriptLineSchema = z.object({
   replyTo: z.string().optional(),
 });
 
+const issueRecordSchema = z.object({
+  id: z.string().min(1),
+  issuedAt: z.number(),
+  preset: z.string().min(1),
+  bindings: z.array(z.string()),
+  envelope: z.literal("plain"),
+  relays: z.array(z.string()),
+  results: z.record(z.string(), z.string()),
+});
+
 // Unknown keys are stripped on parse: v1 files stay loadable when the
 // schema grows additive fields (version bumps still hard-reject below).
 const talkScriptSchema = z.object({
@@ -30,6 +40,7 @@ const talkScriptSchema = z.object({
   baseTimeSec: z.number(),
   personas: z.array(personaSchema),
   lines: z.array(scriptLineSchema),
+  issues: z.array(issueRecordSchema).optional(),
 });
 
 function firstIssue(error: z.ZodError): string {

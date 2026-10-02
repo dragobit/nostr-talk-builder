@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { TestApp } from "@/test/TestApp";
 import { useTalkScript } from "./useTalkScript";
 import { SCRIPT_STORAGE_KEY } from "@/lib/talkscript/persist";
+import { createIssueRecord } from "@/lib/talkscript/issue";
 import { createSampleScript } from "@/lib/talkscript/sample";
 
 function corruptStorage() {
@@ -43,5 +44,42 @@ describe("useTalkScript persistence", () => {
     expect(result.current.restoreError).not.toBeNull();
     act(() => result.current.newScript());
     expect(result.current.restoreError).toBeNull();
+  });
+});
+
+describe("useTalkScript issue records", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("appends records to script.issues without touching sign state", () => {
+    const { result } = renderHook(() => useTalkScript(), {
+      wrapper: TestApp,
+    });
+    const rec = createIssueRecord({
+      preset: "public-plain",
+      relays: ["wss://nos.lol"],
+      results: { ev1: "ok" },
+    });
+    act(() => result.current.addIssueRecord(rec));
+    expect(result.current.script.issues).toEqual([rec]);
+    expect(result.current.skippedCount).toBe(0);
+    act(() => result.current.addIssueRecord(rec));
+    expect(result.current.script.issues).toHaveLength(2);
+  });
+
+  it("replaces issues when a script is imported", () => {
+    const { result } = renderHook(() => useTalkScript(), {
+      wrapper: TestApp,
+    });
+    act(() =>
+      result.current.addIssueRecord(
+        createIssueRecord({
+          preset: "public-plain",
+          relays: [],
+          results: {},
+        }),
+      ),
+    );
+    act(() => result.current.importScript(createSampleScript()));
+    expect(result.current.script.issues).toBeUndefined();
   });
 });

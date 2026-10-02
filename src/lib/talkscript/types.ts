@@ -1,4 +1,5 @@
 import type { NostrEvent } from "nostr-tools";
+import type { IssueRecord } from "./issue";
 
 export const TALK_SCRIPT_VERSION = 1;
 
@@ -35,6 +36,8 @@ export interface TalkScript {
   personas: Persona[];
   /** lines[0] is the root post (kind 11); the rest compile to kind 1111. */
   lines: ScriptLine[];
+  /** Issuance receipts (M3a) — additive optional field, version stays 1. */
+  issues?: IssueRecord[];
 }
 
 /** A deterministic unsigned event: the id is final, only `sig` is missing. */

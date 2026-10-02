@@ -1,6 +1,6 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useSeoMeta } from "@unhead/react";
-import { Download, PenLine, RefreshCw, Upload } from "lucide-react";
+import { Download, PenLine, RefreshCw, Send, Upload } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChatLogView } from "@/components/talklog/ChatLogView";
 import { ThreadTreeView } from "@/components/talklog/ThreadTreeView";
 import { TextDumpView } from "@/components/talklog/TextDumpView";
+import { IssueDialog } from "@/components/talkscript/IssueDialog";
 import { useTalkScript } from "@/hooks/useTalkScript";
 import { toast } from "@/hooks/useToast";
 import {
@@ -27,6 +28,7 @@ const Index = () => {
 
   const t = useTalkScript();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [issueOpen, setIssueOpen] = useState(false);
   const signable = t.script.personas.some((p) => p.key?.trim());
   const signedCount = t.compiled
     ? t.compiled.events.filter((e) => t.signedIds.has(e.id)).length
@@ -124,6 +126,19 @@ const Index = () => {
           <Button size="sm" onClick={t.signAll} disabled={!signable || !t.compiled}>
             一括署名
           </Button>
+          <Button
+            size="sm"
+            onClick={() => setIssueOpen(true)}
+            disabled={signedCount === 0}
+            title={
+              signedCount === 0
+                ? "先に一括署名してください"
+                : "署名済みイベントをリレーに発行"
+            }
+          >
+            <Send className="h-3.5 w-3.5 mr-1" />
+            発行
+          </Button>
         </div>
       </header>
 
@@ -189,6 +204,17 @@ const Index = () => {
           </p>
         </div>
       </main>
+
+      <IssueDialog
+        open={issueOpen}
+        onOpenChange={setIssueOpen}
+        compiled={t.compiled}
+        signedIds={t.signedIds}
+        onIssued={(record) => {
+          t.addIssueRecord(record);
+          toast({ title: "発行レコードを台本に記録しました" });
+        }}
+      />
     </div>
   );
 };
