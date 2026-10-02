@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PersonaPanel } from "@/components/talkscript/PersonaPanel";
 import { LinePanel } from "@/components/talkscript/LinePanel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChatLogView } from "@/components/talklog/ChatLogView";
+import { ThreadTreeView } from "@/components/talklog/ThreadTreeView";
+import { TextDumpView } from "@/components/talklog/TextDumpView";
 import { useTalkScript } from "@/hooks/useTalkScript";
 import { toast } from "@/hooks/useToast";
 import {
@@ -154,11 +157,30 @@ const Index = () => {
           />
         </div>
         <div className="space-y-4">
-          <ChatLogView
-            script={t.script}
-            compiled={t.compiled}
-            signedIds={t.signedIds}
-          />
+          <Tabs defaultValue="chat">
+            <TabsList>
+              <TabsTrigger value="chat">チャット</TabsTrigger>
+              <TabsTrigger value="tree">ツリー</TabsTrigger>
+              <TabsTrigger value="dump">ダンプ</TabsTrigger>
+            </TabsList>
+            <TabsContent value="chat">
+              <ChatLogView
+                script={t.script}
+                compiled={t.compiled}
+                signedIds={t.signedIds}
+              />
+            </TabsContent>
+            <TabsContent value="tree">
+              <ThreadTreeView
+                script={t.script}
+                compiled={t.compiled}
+                signedIds={t.signedIds}
+              />
+            </TabsContent>
+            <TabsContent value="dump">
+              <TextDumpView compiled={t.compiled} />
+            </TabsContent>
+          </Tabs>
           <p className="text-xs text-muted-foreground px-1">
             {signedCount}/{t.compiled?.events.length ?? 0} 件署名済み
             {t.skippedCount > 0 &&

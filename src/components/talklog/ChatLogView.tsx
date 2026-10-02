@@ -1,17 +1,9 @@
-import { CheckCircle2, CircleDashed } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { CompiledTalk, TalkScript } from "@/lib/talkscript/types";
-
-const BUBBLE_COLORS = [
-  "bg-emerald-100 dark:bg-emerald-950",
-  "bg-sky-100 dark:bg-sky-950",
-  "bg-amber-100 dark:bg-amber-950",
-  "bg-rose-100 dark:bg-rose-950",
-  "bg-violet-100 dark:bg-violet-950",
-  "bg-lime-100 dark:bg-lime-950",
-];
+import { SignState } from "./shared";
+import { formatTime, personaColor } from "./utils";
 
 interface Props {
   script: TalkScript;
@@ -19,18 +11,8 @@ interface Props {
   signedIds: Set<string>;
 }
 
-function formatTime(unix: number): string {
-  return new Date(unix * 1000).toLocaleString("ja-JP", {
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 /** Renders the compiled conversation as a chat log, decorated with persona names. */
 export function ChatLogView({ script, compiled, signedIds }: Props) {
-  const personaIndex = new Map(script.personas.map((p, i) => [p.id, i]));
   const personaOf = (id: string) => script.personas.find((p) => p.id === id);
 
   return (
@@ -48,8 +30,7 @@ export function ChatLogView({ script, compiled, signedIds }: Props) {
           const persona = personaOf(line.personaId);
           const event = compiled?.byLineId[line.id];
           const signed = event ? signedIds.has(event.id) : false;
-          const color =
-            BUBBLE_COLORS[(personaIndex.get(line.personaId) ?? 0) % BUBBLE_COLORS.length];
+          const color = personaColor(script, line.personaId);
           return (
             <div key={line.id} className="flex flex-col">
               <span className="text-xs text-muted-foreground mb-0.5">
@@ -68,17 +49,7 @@ export function ChatLogView({ script, compiled, signedIds }: Props) {
               >
                 <p className="text-sm">{line.content || "…"}</p>
                 <div className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
-                  {signed ? (
-                    <>
-                      <CheckCircle2 className="h-3 w-3" />
-                      <span>署名済 kind {event?.kind}</span>
-                    </>
-                  ) : (
-                    <>
-                      <CircleDashed className="h-3 w-3" />
-                      <span>ドラフト kind {event?.kind ?? "—"}</span>
-                    </>
-                  )}
+                  <SignState signed={signed} kind={event?.kind} />
                   {event && (
                     <span className="font-mono ml-1">
                       {event.id.slice(0, 8)}…
