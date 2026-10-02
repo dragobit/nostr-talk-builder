@@ -130,12 +130,17 @@ function IssueDialogBody({ compiled, signedIds, onIssued }: IssueDialogProps) {
     }
   };
 
-  // viewer links for the published root — only shown when every relay
-  // accepted it (matches the record's "ok" semantics)
+  // viewer links for the published root — issueLinks itself gates on the
+  // root's result being "ok" (accepted by every relay)
   const rootId = compiled?.events[0]?.id;
   const links =
-    outcome && rootId && aggregateResults(outcome)[rootId] === "ok"
-      ? issueLinks({ preset, relays, rootId })
+    outcome && rootId
+      ? issueLinks({
+          preset,
+          relays,
+          rootId,
+          results: aggregateResults(outcome),
+        })
       : [];
 
   return (

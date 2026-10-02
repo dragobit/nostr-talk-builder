@@ -289,9 +289,15 @@ describe("ISSUE_PRESETS", () => {
 describe("issueLinks", () => {
   const rootId = "f".repeat(64);
   const relays = ["wss://nos.lol/", "wss://nostr.mom/"];
+  const okResults = { [rootId]: "ok" };
 
   it("builds an njump link whose nevent restores id + relays", () => {
-    const links = issueLinks({ preset: "public-plain", relays, rootId });
+    const links = issueLinks({
+      preset: "public-plain",
+      relays,
+      rootId,
+      results: okResults,
+    });
     expect(links).toHaveLength(1);
     expect(links[0].label).toBe("njump で開く");
     const nevent = links[0].url.replace("https://njump.me/", "");
@@ -304,18 +310,41 @@ describe("issueLinks", () => {
   });
 
   it("substitutes {nevent} into the preset's urlTemplate", () => {
-    const links = issueLinks({ preset: "public-plain", relays, rootId });
+    const links = issueLinks({
+      preset: "public-plain",
+      relays,
+      rootId,
+      results: okResults,
+    });
     const expected = nip19.neventEncode({ id: rootId, relays });
     expect(links[0].url).toBe(`https://njump.me/${expected}`);
   });
 
   it("falls back to njump for unknown preset ids", () => {
-    const links = issueLinks({ preset: "future-preset", relays, rootId });
+    const links = issueLinks({
+      preset: "future-preset",
+      relays,
+      rootId,
+      results: okResults,
+    });
     expect(links).toHaveLength(1);
     expect(links[0].url).toMatch(/^https:\/\/njump\.me\/nevent1/);
   });
 
   it("returns no links without a rootId", () => {
-    expect(issueLinks({ preset: "public-plain", relays })).toEqual([]);
+    expect(
+      issueLinks({ preset: "public-plain", relays, results: okResults }),
+    ).toEqual([]);
+  });
+
+  it("returns no links when the root was not ok on every relay", () => {
+    expect(
+      issueLinks({
+        preset: "public-plain",
+        relays,
+        rootId,
+        results: { [rootId]: "wss://nostr.mom: rejected" },
+      }),
+    ).toEqual([]);
   });
 });

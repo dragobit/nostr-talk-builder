@@ -270,12 +270,13 @@ export interface ResolvedClientLink {
  * Resolve the preset's client links for an issued record: the root's
  * nevent (relays hinted with the ones it was published to) is substituted
  * into each urlTemplate. Unknown preset ids and presets without links
- * fall back to njump. Returns [] when the record has no rootId.
+ * fall back to njump. Returns [] when the record has no rootId or the
+ * root was not accepted by every relay — a failed root's link would 404.
  */
 export function issueLinks(
-  record: Pick<IssueRecord, "rootId" | "relays" | "preset">,
+  record: Pick<IssueRecord, "rootId" | "relays" | "preset" | "results">,
 ): ResolvedClientLink[] {
-  if (!record.rootId) return [];
+  if (!record.rootId || record.results[record.rootId] !== "ok") return [];
   const nevent = nip19.neventEncode({
     id: record.rootId,
     relays: record.relays,
