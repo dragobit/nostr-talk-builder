@@ -2,7 +2,7 @@
   "name": "Applestack",
   "short_name": "Applestack",
   "description": "A modern Nostr client application built with React, TailwindCSS, and Applesauce",
-  "start_url": "/",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#000000",
