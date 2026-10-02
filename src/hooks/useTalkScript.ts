@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { compileScript } from "@/lib/talkscript/compile";
+import { loadStoredScript, saveStoredScript } from "@/lib/talkscript/persist";
 import { signTalk } from "@/lib/talkscript/sign";
 import { createSampleScript, newId } from "@/lib/talkscript/sample";
 import { generateSecretKeyNsec } from "@/lib/talkscript/keys";
@@ -23,15 +24,28 @@ export interface TalkScriptState {
   removeLine: (id: string) => void;
   moveLine: (id: string, dir: -1 | 1) => void;
   newScript: () => void;
+  importScript: (script: TalkScript) => void;
+  /** Set when a persisted script failed validation and was discarded. */
+  restoreError: string | null;
 }
 
 /**
  * Script + compiled IR state for the builder page.
- * In-memory only for M1: the script holds secret keys, so it is not
- * persisted until M2 lands proper storage.
+ * The script (persona keys included — throwaway generated keys by design)
+ * persists to a single localStorage slot; signing state stays in memory.
  */
 export function useTalkScript(): TalkScriptState {
-  const [script, setScript] = useState<TalkScript>(() => createSampleScript());
+  const [initial] = useState(() => {
+    const stored = loadStoredScript();
+    return {
+      script: stored.status === "ok" ? stored.script : createSampleScript(),
+      restoreError: stored.status === "invalid" ? stored.error : null,
+    };
+  });
+  const [restoreError, setRestoreError] = useState<string | null>(
+    initial.restoreError,
+  );
+  const [script, setScript] = useState<TalkScript>(initial.script);
   const [signedIds, setSignedIds] = useState<Set<string>>(new Set());
   const [skippedCount, setSkippedCount] = useState(0);
 
@@ -54,6 +68,12 @@ export function useTalkScript(): TalkScriptState {
     setSignedIds(new Set(result.events.map((e) => e.id)));
     setSkippedCount(result.skippedLineIds.length);
   };
+
+  // Debounced auto-persist; the write also covers newScript/importScript.
+  useEffect(() => {
+    const timer = setTimeout(() => saveStoredScript(script), 300);
+    return () => clearTimeout(timer);
+  }, [script]);
 
   const update = (fn: (s: TalkScript) => TalkScript) => {
     setSkippedCount(0);
@@ -140,6 +160,14 @@ export function useTalkScript(): TalkScriptState {
     setScript(createSampleScript());
     setSignedIds(new Set());
     setSkippedCount(0);
+    setRestoreError(null);
+  };
+
+  const importScript = (next: TalkScript) => {
+    setScript(next);
+    setSignedIds(new Set());
+    setSkippedCount(0);
+    setRestoreError(null);
   };
 
   return {
@@ -158,5 +186,7 @@ export function useTalkScript(): TalkScriptState {
     removeLine,
     moveLine,
     newScript,
+    importScript,
+    restoreError,
   };
 }
