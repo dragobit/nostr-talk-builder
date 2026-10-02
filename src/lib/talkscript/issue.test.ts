@@ -272,6 +272,15 @@ describe("ISSUE_PRESETS", () => {
     );
   });
 
+  it("registers the M3c-sweep client presets with their verified URL formats", () => {
+    expect(ISSUE_PRESETS["ditto-plain"].clientLinks[0].urlTemplate).toBe(
+      "https://ditto.pub/{nevent}",
+    );
+    expect(ISSUE_PRESETS["grimoire-plain"].clientLinks[0].urlTemplate).toBe(
+      "https://grimoire.rocks/{nevent}",
+    );
+  });
+
   it("gives every clientLink a {nevent} placeholder and a label", () => {
     for (const preset of Object.values(ISSUE_PRESETS)) {
       for (const link of preset.clientLinks) {
