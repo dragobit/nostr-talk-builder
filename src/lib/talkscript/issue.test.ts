@@ -3,6 +3,7 @@ import type { NostrEvent } from "nostr-tools";
 import {
   aggregateResults,
   createIssueRecord,
+  dedupeRelays,
   DEFAULT_PUBLISH_RELAYS,
   isValidRelayUrl,
   loadPublishRelays,
@@ -75,10 +76,12 @@ describe("relay list persistence", () => {
     expect(loadPublishRelays()).toEqual(DEFAULT_PUBLISH_RELAYS);
   });
 
-  it("round-trips through localStorage", () => {
-    const relays = ["wss://a.example.com", "ws://b.example.com"];
-    savePublishRelays(relays);
-    expect(loadPublishRelays()).toEqual(relays);
+  it("round-trips through localStorage in canonical form", () => {
+    savePublishRelays(["wss://a.example.com", "ws://b.example.com"]);
+    expect(loadPublishRelays()).toEqual([
+      "wss://a.example.com/",
+      "ws://b.example.com/",
+    ]);
   });
 
   it("drops stored entries that are not ws/wss urls", () => {
@@ -86,7 +89,30 @@ describe("relay list persistence", () => {
       RELAY_STORAGE_KEY,
       JSON.stringify(["wss://ok.example.com", "https://evil.example.com", 42]),
     );
-    expect(loadPublishRelays()).toEqual(["wss://ok.example.com"]);
+    expect(loadPublishRelays()).toEqual(["wss://ok.example.com/"]);
+  });
+
+  it("canonicalizes and dedupes stored entries", () => {
+    localStorage.setItem(
+      RELAY_STORAGE_KEY,
+      JSON.stringify([
+        "wss://nos.lol",
+        "wss://nos.lol/",
+        "wss://a.example.com",
+      ]),
+    );
+    expect(loadPublishRelays()).toEqual([
+      "wss://nos.lol/",
+      "wss://a.example.com/",
+    ]);
+  });
+
+  it("dedupes on save as well as load", () => {
+    savePublishRelays(["wss://a.example.com", "wss://a.example.com/"]);
+    expect(JSON.parse(localStorage.getItem(RELAY_STORAGE_KEY)!)).toEqual([
+      "wss://a.example.com/",
+    ]);
+    expect(loadPublishRelays()).toEqual(["wss://a.example.com/"]);
   });
 
   it("falls back to defaults on corrupt or all-invalid storage", () => {
@@ -122,6 +148,19 @@ describe("relay url validation", () => {
     expect(normalizeRelayInput(" relay.example.com:7777 ")).toBe(
       "wss://relay.example.com:7777/",
     );
+  });
+});
+
+describe("dedupeRelays", () => {
+  it("collapses normalized-equivalent urls and keeps canonical form", () => {
+    expect(
+      dedupeRelays([
+        "wss://a.example.com",
+        "wss://a.example.com/",
+        "wss://a.example.com:443",
+        "wss://b.example.com",
+      ]),
+    ).toEqual(["wss://a.example.com/", "wss://b.example.com/"]);
   });
 });
 

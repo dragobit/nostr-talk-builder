@@ -7,9 +7,10 @@ export const RELAY_STORAGE_KEY = "nostr-talk-builder:relays:v1";
 
 /**
  * Open-write relays suitable for testing synthetic conversations.
- * Deliberately not the big public relays.
+ * Deliberately not the big public relays. Canonical form (normalizeURL),
+ * matching what the pool reports back in PublishResponse.from.
  */
-export const DEFAULT_PUBLISH_RELAYS = ["wss://nos.lol", "wss://nostr.mom"];
+export const DEFAULT_PUBLISH_RELAYS = ["wss://nos.lol/", "wss://nostr.mom/"];
 
 export interface IssuePreset {
   label: string;
@@ -72,12 +73,31 @@ export function normalizeRelayInput(input: string): string | null {
   // "host:port" must not be misparsed as a scheme.
   if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url)) url = `wss://${url}`;
   if (!isValidRelayUrl(url)) return null;
-  return new URL(url).toString();
+  return normalizeURL(url);
+}
+
+/**
+ * Canonicalize and dedupe a relay list: "wss://a" and "wss://a/" are the
+ * same relay. Output entries are always in normalizeURL form, so an
+ * exact-string `includes` is a correct membership check.
+ */
+export function dedupeRelays(relays: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const relay of relays) {
+    const canonical = normalizeURL(relay);
+    if (!seen.has(canonical)) {
+      seen.add(canonical);
+      out.push(canonical);
+    }
+  }
+  return out;
 }
 
 /**
  * Read the persisted publish relays. Missing, corrupt, or empty-after-
- * filtering storage falls back to DEFAULT_PUBLISH_RELAYS.
+ * filtering storage falls back to DEFAULT_PUBLISH_RELAYS. Returned entries
+ * are always canonical (dedupeRelays form).
  */
 export function loadPublishRelays(): string[] {
   try {
@@ -85,8 +105,10 @@ export function loadPublishRelays(): string[] {
     if (raw === null) return [...DEFAULT_PUBLISH_RELAYS];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [...DEFAULT_PUBLISH_RELAYS];
-    const relays = parsed.filter(
-      (r): r is string => typeof r === "string" && isValidRelayUrl(r),
+    const relays = dedupeRelays(
+      parsed.filter(
+        (r): r is string => typeof r === "string" && isValidRelayUrl(r),
+      ),
     );
     return relays.length > 0 ? relays : [...DEFAULT_PUBLISH_RELAYS];
   } catch {
@@ -94,10 +116,11 @@ export function loadPublishRelays(): string[] {
   }
 }
 
-/** Persist the publish relay list (best-effort, like saveStoredScript). */
+/** Persist the publish relay list canonically (best-effort). */
 export function savePublishRelays(relays: string[]): void {
   try {
-    localStorage.setItem(RELAY_STORAGE_KEY, JSON.stringify(relays));
+    const canonical = dedupeRelays(relays.filter(isValidRelayUrl));
+    localStorage.setItem(RELAY_STORAGE_KEY, JSON.stringify(canonical));
   } catch (error) {
     console.warn("Failed to persist publish relays:", error);
   }

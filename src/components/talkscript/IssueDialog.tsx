@@ -18,6 +18,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   aggregateResults,
   createIssueRecord,
+  dedupeRelays,
   ISSUE_PRESETS,
   loadPublishRelays,
   normalizeRelayInput,
@@ -68,11 +69,12 @@ function IssueDialogBody({
   const unsigned =
     compiled?.events.filter((e) => !signedIds.has(e.id)) ?? [];
 
-  // captured once per dialog open (body remounts on open)
+  // captured once per dialog open (body remounts on open); only events
+  // that will actually be sent (targets) count toward the warning
   const [openedAtSec] = useState(() => Math.floor(Date.now() / 1000));
-  const futureCount =
-    compiled?.events.filter((e) => e.created_at > openedAtSec + 15 * 60)
-      .length ?? 0;
+  const futureCount = targets.filter(
+    (e) => e.created_at > openedAtSec + 15 * 60,
+  ).length;
 
   const updateRelays = (next: string[]) => {
     setRelays(next);
@@ -87,7 +89,9 @@ function IssueDialogBody({
     }
     setRelayError(null);
     setRelayInput("");
-    if (!relays.includes(normalized)) updateRelays([...relays, normalized]);
+    // dedupe by canonical url — "wss://a" and "wss://a/" are the same relay
+    const next = dedupeRelays([...relays, normalized]);
+    if (next.length > relays.length) updateRelays(next);
   };
 
   const canExecute =
