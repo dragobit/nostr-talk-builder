@@ -20,10 +20,12 @@ import {
   createIssueRecord,
   dedupeRelays,
   ISSUE_PRESETS,
+  issueLinks,
   loadPublishRelays,
   normalizeRelayInput,
   publishToRelays,
   savePublishRelays,
+  type IssuePreset,
   type IssuePresetId,
   type IssueRecord,
   type PublishOutcome,
@@ -52,11 +54,7 @@ export function IssueDialog(props: IssueDialogProps) {
   );
 }
 
-function IssueDialogBody({
-  compiled,
-  signedIds,
-  onIssued,
-}: IssueDialogProps) {
+function IssueDialogBody({ compiled, signedIds, onIssued }: IssueDialogProps) {
   const [preset, setPreset] = useState<IssuePresetId>("public-plain");
   const [relays, setRelays] = useState<string[]>(loadPublishRelays);
   const [relayInput, setRelayInput] = useState("");
@@ -66,8 +64,7 @@ function IssueDialogBody({
   const [skipped, setSkipped] = useState<DraftEvent[]>([]);
 
   const targets = compiled?.events.filter((e) => signedIds.has(e.id)) ?? [];
-  const unsigned =
-    compiled?.events.filter((e) => !signedIds.has(e.id)) ?? [];
+  const unsigned = compiled?.events.filter((e) => !signedIds.has(e.id)) ?? [];
 
   // captured once per dialog open (body remounts on open); only events
   // that will actually be sent (targets) count toward the warning
@@ -117,10 +114,14 @@ function IssueDialogBody({
       );
       setOutcome(published);
       setSkipped([...unsigned, ...storeMisses]);
+      // rootId is recorded only when the kind 11 root was actually sent —
+      // links to an unpublished root would 404 on the viewer side
+      const rootId = compiled?.events[0]?.id;
       onIssued(
         createIssueRecord({
           preset,
           relays,
+          rootId: targets.some((d) => d.id === rootId) ? rootId : undefined,
           results: aggregateResults(published),
         }),
       );
@@ -128,6 +129,19 @@ function IssueDialogBody({
       setRunning(false);
     }
   };
+
+  // viewer links for the published root — issueLinks itself gates on the
+  // root's result being "ok" (accepted by every relay)
+  const rootId = compiled?.events[0]?.id;
+  const links =
+    outcome && rootId
+      ? issueLinks({
+          preset,
+          relays,
+          rootId,
+          results: aggregateResults(outcome),
+        })
+      : [];
 
   return (
     <>
@@ -144,21 +158,36 @@ function IssueDialogBody({
           if (v in ISSUE_PRESETS) setPreset(v as IssuePresetId);
         }}
       >
-        {Object.entries(ISSUE_PRESETS).map(([id, p]) => (
-          <div key={id} className="flex items-start gap-2">
-            <RadioGroupItem
-              value={id}
-              id={`issue-preset-${id}`}
-              className="mt-1"
-            />
-            <Label htmlFor={`issue-preset-${id}`} className="font-normal">
-              <span className="block text-sm">{p.label}</span>
-              <span className="block text-xs text-muted-foreground">
-                {p.description}
-              </span>
-            </Label>
-          </div>
-        ))}
+        {(Object.entries(ISSUE_PRESETS) as [string, IssuePreset][]).map(
+          ([id, p]) => (
+            <div key={id} className="flex items-start gap-2">
+              <RadioGroupItem
+                value={id}
+                id={`issue-preset-${id}`}
+                className="mt-1"
+                disabled={p.disabledReason !== undefined}
+              />
+              <Label
+                htmlFor={`issue-preset-${id}`}
+                className={
+                  p.disabledReason !== undefined
+                    ? "font-normal opacity-60"
+                    : "font-normal"
+                }
+              >
+                <span className="block text-sm">{p.label}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {p.description}
+                </span>
+                {p.disabledReason !== undefined && (
+                  <span className="block text-xs text-muted-foreground">
+                    {p.disabledReason}
+                  </span>
+                )}
+              </Label>
+            </div>
+          ),
+        )}
       </RadioGroup>
 
       {ISSUE_PRESETS[preset].publishes && (
@@ -267,6 +296,22 @@ function IssueDialogBody({
               </li>
             ))}
           </ul>
+          {links.length > 0 && (
+            <ul className="space-y-1">
+              {links.map((link) => (
+                <li key={link.url}>
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary underline underline-offset-2"
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
           <p className="text-xs text-muted-foreground">
             発行レコードを台本に追記しました。
           </p>

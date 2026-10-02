@@ -31,7 +31,13 @@ function fixture(): TalkScript {
     ],
     lines: [
       { id: "l1", personaId: "pa", content: "first", offsetSec: 0 },
-      { id: "l2", personaId: "pb", content: "second", offsetSec: 60, replyTo: "l1" },
+      {
+        id: "l2",
+        personaId: "pb",
+        content: "second",
+        offsetSec: 60,
+        replyTo: "l1",
+      },
       { id: "l3", personaId: "pa", content: "third", offsetSec: 120 },
     ],
   };
@@ -77,6 +83,47 @@ describe("serializeTalkScript / deserializeTalkScript", () => {
     const script = fixture();
     const restored = deserializeTalkScript(serializeTalkScript(script));
     expect(compileScript(restored)).toEqual(compileScript(script));
+  });
+
+  it("round-trips an issue record carrying rootId", () => {
+    const script: TalkScript = {
+      ...fixture(),
+      issues: [
+        {
+          id: "issue-1",
+          issuedAt: 1_700_000_100,
+          preset: "public-plain",
+          bindings: [],
+          envelope: "plain",
+          relays: ["wss://nos.lol/"],
+          rootId: "f".repeat(64),
+          results: { "event-1": "ok" },
+        },
+      ],
+    };
+    const restored = deserializeTalkScript(serializeTalkScript(script));
+    expect(restored).toEqual(script);
+    expect(restored.issues?.[0].rootId).toBe("f".repeat(64));
+  });
+
+  it("reads older issue records that have no rootId", () => {
+    const script: TalkScript = {
+      ...fixture(),
+      issues: [
+        {
+          id: "issue-1",
+          issuedAt: 1_700_000_100,
+          preset: "public-plain",
+          bindings: [],
+          envelope: "plain",
+          relays: ["wss://nos.lol/"],
+          results: { "event-1": "ok" },
+        },
+      ],
+    };
+    const restored = deserializeTalkScript(serializeTalkScript(script));
+    expect(restored.issues?.[0].rootId).toBeUndefined();
+    expect(restored.issues?.[0].results["event-1"]).toBe("ok");
   });
 });
 
