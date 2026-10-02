@@ -70,6 +70,18 @@ describe("compileScript", () => {
   });
 });
 
+describe("personaPubkey fallback", () => {
+  it("resolves an undecodable key via the declared pubkey", () => {
+    const script = fixture();
+    script.personas[0].key = "nsec1invalid";
+    script.personas[0].pubkey = "e".repeat(64);
+    const { events } = compileScript(script);
+    expect(events[0].pubkey).toBe("e".repeat(64));
+    const { skippedLineIds } = signTalk(script, compileScript(script));
+    expect(skippedLineIds).toEqual(["l1", "l3", "l4"]);
+  });
+});
+
 describe("signTalk", () => {
   it("signs drafts of personas with held keys, keeps ids, skips the rest", () => {
     const script = fixture();

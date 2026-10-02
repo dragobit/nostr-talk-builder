@@ -1,8 +1,14 @@
-import { Dices, Plus, Trash2 } from "lucide-react";
+import { Dices, PenLine, Plus, Trash2 } from "lucide-react";
+import { getPublicKey } from "nostr-tools";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { generateSecretKeyNsec, personaPubkey } from "@/lib/talkscript/keys";
+import {
+  decodeSecretKey,
+  generateSecretKeyNsec,
+  personaCanSign,
+  personaPubkey,
+} from "@/lib/talkscript/keys";
 import type { Persona } from "@/lib/talkscript/types";
 
 interface Props {
@@ -40,6 +46,18 @@ export function PersonaPanel({ personas, onAdd, onUpdate, onRemove }: Props) {
                 >
                   {pubkey ? shortHex(pubkey) : "key?"}
                 </span>
+                {personaCanSign(persona) ? (
+                  <PenLine className="h-3 w-3 text-muted-foreground" aria-label="署名可能" />
+                ) : (
+                  pubkey && (
+                    <span
+                      className="text-[10px] text-muted-foreground"
+                      title="公開鍵のみ — このペルソナの発言は署名されない"
+                    >
+                      参照のみ
+                    </span>
+                  )
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -66,12 +84,18 @@ export function PersonaPanel({ personas, onAdd, onUpdate, onRemove }: Props) {
               </div>
               <Input
                 value={persona.key ?? ""}
-                onChange={(e) =>
-                  onUpdate(persona.id, {
-                    key: e.target.value || undefined,
-                    pubkey: undefined,
-                  })
-                }
+                onChange={(e) => {
+                  const key = e.target.value || undefined;
+                  let pubkey = persona.pubkey;
+                  if (key) {
+                    try {
+                      pubkey = getPublicKey(decodeSecretKey(key));
+                    } catch {
+                      // undecodable input: keep the previous pubkey
+                    }
+                  }
+                  onUpdate(persona.id, { key, pubkey });
+                }}
                 className="h-7 font-mono text-xs"
                 placeholder="nsec1... (空=鍵を持たない署名者)"
                 spellCheck={false}

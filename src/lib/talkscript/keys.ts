@@ -28,7 +28,7 @@ export function personaPubkey(persona: Persona): string | null {
     try {
       return getPublicKey(decodeSecretKey(persona.key));
     } catch {
-      return null;
+      // undecodable key: fall back to the declared pubkey
     }
   }
   const pk = persona.pubkey?.trim();
