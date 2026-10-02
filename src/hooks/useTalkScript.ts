@@ -42,7 +42,9 @@ export function useTalkScript(): TalkScriptState {
       restoreError: stored.status === "invalid" ? stored.error : null,
     };
   });
-  const restoreError = initial.restoreError;
+  const [restoreError, setRestoreError] = useState<string | null>(
+    initial.restoreError,
+  );
   const [script, setScript] = useState<TalkScript>(initial.script);
   const [signedIds, setSignedIds] = useState<Set<string>>(new Set());
   const [skippedCount, setSkippedCount] = useState(0);
@@ -158,12 +160,14 @@ export function useTalkScript(): TalkScriptState {
     setScript(createSampleScript());
     setSignedIds(new Set());
     setSkippedCount(0);
+    setRestoreError(null);
   };
 
   const importScript = (next: TalkScript) => {
     setScript(next);
     setSignedIds(new Set());
     setSkippedCount(0);
+    setRestoreError(null);
   };
 
   return {
