@@ -64,8 +64,11 @@ export default {
           const rootPath = path.resolve(htmlDir, '.' + manifestPath);
           resolvedManifestPath = fs.existsSync(publicPath) ? publicPath : rootPath;
         } else {
-          // Relative path
-          resolvedManifestPath = path.resolve(htmlDir, manifestPath);
+          // Relative path - resolves against the page URL at runtime, while the
+          // file itself lives in public/ (copied to the dist root by Vite).
+          const directPath = path.resolve(htmlDir, manifestPath);
+          const publicPath = path.resolve(htmlDir, 'public', manifestPath);
+          resolvedManifestPath = fs.existsSync(directPath) ? directPath : publicPath;
         }
         
         // Check if the manifest file exists

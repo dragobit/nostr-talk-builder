@@ -7,9 +7,20 @@ import Settings from "./pages/Settings";
 import { NIP19Page } from "./pages/NIP19Page";
 import NotFound from "./pages/NotFound";
 
+// The bundle lives at <mount>/assets/index-*.js, so the directory above
+// /assets/ is where the app is mounted. Deriving the basename at runtime
+// (rather than baking it into the build) keeps one dist/ deployable to a
+// domain root and to subpaths like GitHub Pages' /<repo>/ at once.
+function appBasename(): string {
+  const script = document.querySelector('script[src*="/assets/"]');
+  if (!(script instanceof HTMLScriptElement)) return '/';
+  const pathname = new URL(script.src, window.location.href).pathname;
+  return pathname.replace(/\/assets\/.*$/, '') || '/';
+}
+
 export function AppRouter() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={appBasename()}>
       <ScrollToTop />
       <Routes>
         <Route path="/" element={<Index />} />
