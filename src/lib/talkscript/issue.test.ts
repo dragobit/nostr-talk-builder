@@ -272,6 +272,16 @@ describe("ISSUE_PRESETS", () => {
     );
   });
 
+  it("gives every clientLink a {nevent} placeholder and a label", () => {
+    for (const preset of Object.values(ISSUE_PRESETS)) {
+      for (const link of preset.clientLinks) {
+        expect(link.label.length).toBeGreaterThan(0);
+        expect(link.urlTemplate).toContain("{nevent}");
+        expect(link.urlTemplate.startsWith("https://")).toBe(true);
+      }
+    }
+  });
+
   it("offers at least one disabled preset announcing future work", () => {
     const disabled = Object.values(ISSUE_PRESETS).filter(
       (p: IssuePreset) => p.disabledReason !== undefined,
@@ -290,6 +300,11 @@ describe("issueLinks", () => {
   const rootId = "f".repeat(64);
   const relays = ["wss://nos.lol/", "wss://nostr.mom/"];
   const okResults = { [rootId]: "ok" };
+  // presets with no clientLinks of their own fall back to this link
+  const NJUMP_FALLBACK = {
+    label: "njump で開く",
+    urlTemplate: "https://njump.me/{nevent}",
+  };
 
   it("builds an njump link whose nevent restores id + relays", () => {
     const links = issueLinks({
@@ -318,6 +333,26 @@ describe("issueLinks", () => {
     });
     const expected = nip19.neventEncode({ id: rootId, relays });
     expect(links[0].url).toBe(`https://njump.me/${expected}`);
+  });
+
+  it("substitutes {nevent} into every client preset's urlTemplate", () => {
+    const expected = nip19.neventEncode({ id: rootId, relays });
+    for (const [id, preset] of Object.entries(ISSUE_PRESETS)) {
+      const links = issueLinks({
+        preset: id,
+        relays,
+        rootId,
+        results: okResults,
+      });
+      const templates = preset.clientLinks.length
+        ? preset.clientLinks
+        : [NJUMP_FALLBACK];
+      expect(links).toHaveLength(templates.length);
+      templates.forEach((t, i) => {
+        expect(links[i].label).toBe(t.label);
+        expect(links[i].url).toBe(t.urlTemplate.replace("{nevent}", expected));
+      });
+    }
   });
 
   it("falls back to njump for unknown preset ids", () => {

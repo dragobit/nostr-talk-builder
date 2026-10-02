@@ -48,6 +48,61 @@ export const ISSUE_PRESETS = {
       { label: "njump で開く", urlTemplate: "https://njump.me/{nevent}" },
     ],
   },
+  "coracle-plain": {
+    label: "Coracle 用（平文＋公開リレー）",
+    description:
+      "署名済みイベントを下記リレーに平文のまま送信します。Coracle はルートと各コメントを個別表示します。",
+    publishes: true,
+    bindings: [],
+    envelope: "plain",
+    clientLinks: [
+      { label: "Coracle で開く", urlTemplate: "https://coracle.social/notes/{nevent}" },
+    ],
+  },
+  "iris-plain": {
+    label: "Iris 用（平文＋公開リレー）",
+    description:
+      "署名済みイベントを下記リレーに平文のまま送信します。Iris はルートと各コメント（親イベント付き）を表示します。",
+    publishes: true,
+    bindings: [],
+    envelope: "plain",
+    clientLinks: [
+      { label: "Iris で開く", urlTemplate: "https://iris.to/{nevent}" },
+    ],
+  },
+  "jumble-plain": {
+    label: "Jumble 用（平文＋公開リレー）",
+    description:
+      "署名済みイベントを下記リレーに平文のまま送信します。Jumble は kind 11 ルートを描画しませんが、kind 1111 コメントをスレッド表示します。",
+    publishes: true,
+    bindings: [],
+    envelope: "plain",
+    clientLinks: [
+      { label: "Jumble で開く", urlTemplate: "https://jumble.social/notes/{nevent}" },
+    ],
+  },
+  "nostrudel-plain": {
+    label: "noStrudel 用（平文＋公開リレー）",
+    description:
+      "署名済みイベントを下記リレーに平文のまま送信します。noStrudel はルートと各コメントを個別表示します。",
+    publishes: true,
+    bindings: [],
+    envelope: "plain",
+    clientLinks: [
+      { label: "noStrudel で開く", urlTemplate: "https://nostrudel.ninja/n/{nevent}" },
+    ],
+  },
+  "snort-plain": {
+    label: "Snort 用（平文＋公開リレー）",
+    description:
+      "署名済みイベントを下記リレーに平文のまま送信します。Snort は kind 11 ルートを描画しませんが、kind 1111 コメントをスレッド表示します。",
+    publishes: true,
+    bindings: [],
+    envelope: "plain",
+    clientLinks: [
+      { label: "Snort で開く", urlTemplate: "https://snort.social/e/{nevent}" },
+    ],
+  },
   "app-only": {
     label: "アプリ内のみ",
     description:
