@@ -1,8 +1,10 @@
-# applestack-devin
+# nostr-talk-builder
 
-**A Devin-driven template for Nostr clients** — a fork of [hzrd149/applestack](https://github.com/hzrd149/applestack) hardened for agent-driven development.
+**会話コンパイラ** — 複数ペルソナの台本を 1 画面で編集し、本物の署名済み Nostr イベント（kind 11 ルート + kind 1111 コメント）として出力するアプリ。LINE トーク画像生成器の UX だが、偽造画像ではなく実イベント。
 
-This is a **template repository**: fork or clone it, then drive changes through Devin sessions and pull requests. `AGENTS.md` is the authoritative guide for commands and app wiring — keep it accurate as the repo evolves.
+パイプライン: `台本(Script) → ドラフト(unsigned) → 一括署名 → IR(kind 11 + 1111) → 発行`
+
+Built on the [applestack-devin](https://github.com/dragobit/applestack-devin) template (a Devin-hardened fork of [hzrd149/applestack](https://github.com/hzrd149/applestack)). `AGENTS.md` is the authoritative guide for commands and app wiring — keep it accurate as the repo evolves.
 
 ## Stack
 

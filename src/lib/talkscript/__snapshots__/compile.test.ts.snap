@@ -1,0 +1,130 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`compileScript > is deterministic: same script compiles to identical events 1`] = `
+[
+  {
+    "content": "first",
+    "created_at": 1700000000,
+    "id": "e6b0c0c2ec6e39f1d6c5e6ffc7bf198ffaed4a978e106abc6f6a5c7d889d9e01",
+    "kind": 11,
+    "pubkey": "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
+    "tags": [
+      [
+        "subject",
+        "テスト会話",
+      ],
+    ],
+  },
+  {
+    "content": "second",
+    "created_at": 1700000060,
+    "id": "943bd1e6affae27df8032d3179f862101dfa21421910246258c2aef7d0608e76",
+    "kind": 1111,
+    "pubkey": "68680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5",
+    "tags": [
+      [
+        "E",
+        "e6b0c0c2ec6e39f1d6c5e6ffc7bf198ffaed4a978e106abc6f6a5c7d889d9e01",
+        "",
+        "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
+      ],
+      [
+        "K",
+        "11",
+      ],
+      [
+        "P",
+        "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
+      ],
+      [
+        "e",
+        "e6b0c0c2ec6e39f1d6c5e6ffc7bf198ffaed4a978e106abc6f6a5c7d889d9e01",
+        "",
+        "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
+      ],
+      [
+        "k",
+        "11",
+      ],
+      [
+        "p",
+        "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
+      ],
+    ],
+  },
+  {
+    "content": "third",
+    "created_at": 1700000120,
+    "id": "f8f7247f9d766740975aa5ac21ea77192e87a7992c1cd506a3e1260128869ab8",
+    "kind": 1111,
+    "pubkey": "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
+    "tags": [
+      [
+        "E",
+        "e6b0c0c2ec6e39f1d6c5e6ffc7bf198ffaed4a978e106abc6f6a5c7d889d9e01",
+        "",
+        "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
+      ],
+      [
+        "K",
+        "11",
+      ],
+      [
+        "P",
+        "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
+      ],
+      [
+        "e",
+        "943bd1e6affae27df8032d3179f862101dfa21421910246258c2aef7d0608e76",
+        "",
+        "68680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5",
+      ],
+      [
+        "k",
+        "1111",
+      ],
+      [
+        "p",
+        "68680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5",
+      ],
+    ],
+  },
+  {
+    "content": "unsigned",
+    "created_at": 1700000180,
+    "id": "9a85ed51fafb83c045c17db85e140480557a2ec43caff582c01ab4c00ca019cd",
+    "kind": 1111,
+    "pubkey": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "tags": [
+      [
+        "E",
+        "e6b0c0c2ec6e39f1d6c5e6ffc7bf198ffaed4a978e106abc6f6a5c7d889d9e01",
+        "",
+        "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
+      ],
+      [
+        "K",
+        "11",
+      ],
+      [
+        "P",
+        "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
+      ],
+      [
+        "e",
+        "e6b0c0c2ec6e39f1d6c5e6ffc7bf198ffaed4a978e106abc6f6a5c7d889d9e01",
+        "",
+        "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
+      ],
+      [
+        "k",
+        "11",
+      ],
+      [
+        "p",
+        "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
+      ],
+    ],
+  },
+]
+`;
