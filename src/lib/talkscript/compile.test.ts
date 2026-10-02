@@ -68,6 +68,13 @@ describe("compileScript", () => {
     expect(a.events.map((e) => e.id)).toEqual(b.events.map((e) => e.id));
     expect(a.events).toMatchSnapshot();
   });
+
+  it("rejects replyTo pointing at a later line (broken ordering)", () => {
+    const script = fixture();
+    // move l3 above its parent l2 — the UI select can't create this, but reordering can
+    [script.lines[1], script.lines[2]] = [script.lines[2], script.lines[1]];
+    expect(() => compileScript(script)).toThrow(/later or unknown/);
+  });
 });
 
 describe("personaPubkey fallback", () => {

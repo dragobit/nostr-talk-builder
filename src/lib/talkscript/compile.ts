@@ -45,12 +45,17 @@ function assertValid(script: TalkScript): Map<string, string> {
     pubkeys.set(persona.id, pk);
   }
 
-  const lineIds = new Set(script.lines.map((l) => l.id));
+  const earlier = new Set<string>();
   for (const line of script.lines) {
     if (!pubkeys.has(line.personaId))
       throw new CompileError(`line ${line.id} references unknown persona`);
-    if (line.replyTo && !lineIds.has(line.replyTo))
-      throw new CompileError(`line ${line.id} replies to unknown line`);
+    // parents must precede children in document order (the editor can only
+    // create earlier-line refs, but reordering can break this)
+    if (line.replyTo && !earlier.has(line.replyTo))
+      throw new CompileError(
+        `line ${line.id} replies to a later or unknown line`,
+      );
+    earlier.add(line.id);
   }
   return pubkeys;
 }

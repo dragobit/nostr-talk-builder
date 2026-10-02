@@ -55,8 +55,10 @@ export function useTalkScript(): TalkScriptState {
     setSkippedCount(result.skippedLineIds.length);
   };
 
-  const update = (fn: (s: TalkScript) => TalkScript) =>
+  const update = (fn: (s: TalkScript) => TalkScript) => {
+    setSkippedCount(0);
     setScript((s) => fn(s));
+  };
 
   const addPersona = () =>
     update((s) => ({
