@@ -153,6 +153,24 @@ export const ISSUE_PRESETS = {
       { label: "ditto で開く", urlTemplate: "https://ditto.pub/{nevent}" },
     ],
   },
+  "amethyst-plain": {
+    label: "Amethyst 用（平文＋公開リレー）",
+    description:
+      "署名済みイベントを下記リレーに平文のまま送信します。Amethyst (Android) は kind 11 ルート（subject/title が見出し表示）と kind 1111 コメントをインデント付きのネストスレッドとして一体表示します。nostr: リンクは Amethyst が入った Android 端末で直接開きます（デスクトップでは njump のプレビューを使ってください）。",
+    publishes: true,
+    bindings: [],
+    envelope: "plain",
+    clientLinks: [
+      {
+        label: "Amethyst で開く (nostr: URI)",
+        urlTemplate: "nostr:{nevent}",
+      },
+      {
+        label: "njump で開く",
+        urlTemplate: "https://njump.me/{nevent}",
+      },
+    ],
+  },
   "grimoire-plain": {
     label: "grimoire 用（平文＋公開リレー）",
     description:
