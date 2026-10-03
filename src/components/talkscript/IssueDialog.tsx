@@ -84,6 +84,7 @@ function IssueDialogBody({
   const [relayInput, setRelayInput] = useState("");
   const [relayError, setRelayError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<PublishOutcome | null>(null);
   const [rows, setRows] = useState<ResultRow[]>([]);
   // root id of the last run — for wire presets this is the wire-compiled
@@ -162,6 +163,7 @@ function IssueDialogBody({
     setRunning(true);
     setOutcome(null);
     setRows([]);
+    setRunError(null);
     try {
       if (presetDef.wire) {
         // wire presets re-compile a dedicated event set from the script
@@ -244,6 +246,10 @@ function IssueDialogBody({
           results: aggregateResults(published),
         }),
       );
+    } catch (e) {
+      // compile/sign throws (WireError, CompileError) reach the user here
+      // instead of dying as an unhandled rejection with a silent UI
+      setRunError(e instanceof Error ? e.message : String(e));
     } finally {
       setRunning(false);
     }
@@ -400,6 +406,12 @@ function IssueDialogBody({
               : `${targets.length} 件を送信予定${unsigned.length > 0 ? ` · ${unsigned.length} 件は未署名のためスキップ` : ""}`}
           </p>
         </div>
+      )}
+
+      {runError && (
+        <Alert variant="destructive">
+          <AlertDescription>発行に失敗しました — {runError}</AlertDescription>
+        </Alert>
       )}
 
       {futureCount > 0 && ISSUE_PRESETS[preset].publishes && (
