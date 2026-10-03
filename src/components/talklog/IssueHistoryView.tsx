@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ExternalLink, MailOpen, Send } from "lucide-react";
+import { ExternalLink, FileInput, MailOpen, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +26,9 @@ interface Props {
   /** Opens the Concord channel reader for a concord record's coordinate
    * (channelId/epoch from record.params; channelKey is re-entered). */
   onOpenChannel?: (prefill: ChannelPrefill) => void;
+  /** Opens the import dialog's channel mode for a concord record's
+   * coordinate (channelKey is re-entered). */
+  onImportChannel?: (prefill: ChannelPrefill) => void;
 }
 
 /**
@@ -34,7 +37,12 @@ interface Props {
  * records with a rootId — the preset's client links. Eligible records
  * (plain, unbound, fully-signable) offer a resend action.
  */
-export function IssueHistoryView({ script, onResent, onOpenChannel }: Props) {
+export function IssueHistoryView({
+  script,
+  onResent,
+  onOpenChannel,
+  onImportChannel,
+}: Props) {
   const records = [...(script.issues ?? [])].reverse();
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [resendError, setResendError] = useState<{
@@ -170,6 +178,24 @@ export function IssueHistoryView({ script, onResent, onOpenChannel }: Props) {
                         >
                           <MailOpen className="h-3 w-3 mr-1" />
                           開く
+                        </Button>
+                      )}
+                      {isConcord && onImportChannel && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 text-xs px-2"
+                          onClick={() =>
+                            onImportChannel({
+                              channelId: record.params?.channelId,
+                              epoch: record.params?.epoch ?? "0",
+                              relays: record.relays,
+                            })
+                          }
+                          title="このチャンネル座標から台本を取り込みます（チャンネル鍵は再入力）"
+                        >
+                          <FileInput className="h-3 w-3 mr-1" />
+                          取り込み
                         </Button>
                       )}
                       {blockReason && (

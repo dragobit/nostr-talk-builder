@@ -292,9 +292,28 @@ export interface ChannelFold {
 }
 
 /** Last tag value wins (NIP-22 parent-scope convention). */
-function lastTagValue(rumor: Rumor, name: string): string | undefined {
+export function lastTagValue(rumor: Rumor, name: string): string | undefined {
   const tags = rumor.tags.filter((t) => t[0] === name && t[1]);
   return tags.at(-1)?.[1];
+}
+
+/**
+ * Canonical (pre-binding) id of a rumor: strip the channel/epoch binding
+ * tags and re-hash. Rumors minted by wrapping a canonical IR event (M4c)
+ * recover the wrapped event's id this way; native Concord rumors get a
+ * stable secondary id the reference resolver also tries.
+ */
+export function canonicalRumorId(rumor: Rumor): string {
+  const stripped = {
+    kind: rumor.kind,
+    pubkey: rumor.pubkey,
+    created_at: rumor.created_at,
+    content: rumor.content,
+    tags: rumor.tags.filter(
+      (t) => t[0] !== "channel" && t[0] !== "epoch",
+    ),
+  };
+  return getEventHash(stripped as NostrEvent);
 }
 
 /**
@@ -313,16 +332,7 @@ export function foldRumors(rumors: Iterable<Rumor>): ChannelFold {
   const byCanonicalId = new Map<string, Rumor>();
   for (const rumor of all) {
     byId.set(rumor.id, rumor);
-    const stripped = {
-      kind: rumor.kind,
-      pubkey: rumor.pubkey,
-      created_at: rumor.created_at,
-      content: rumor.content,
-      tags: rumor.tags.filter(
-        (t) => t[0] !== "channel" && t[0] !== "epoch",
-      ),
-    };
-    const canonicalId = getEventHash(stripped as NostrEvent);
+    const canonicalId = canonicalRumorId(rumor);
     if (canonicalId !== rumor.id) byCanonicalId.set(canonicalId, rumor);
   }
   const resolve = (id: string) => byId.get(id) ?? byCanonicalId.get(id);

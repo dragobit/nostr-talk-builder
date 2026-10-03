@@ -10,10 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { RelayListEditor } from "@/components/talkscript/RelayListEditor";
 import { deriveChannelStream } from "@/lib/concord/derive";
+import { CoordinateFields } from "./CoordinateFields";
 import type { ChannelSession } from "@/lib/concord/read";
 import { dedupeRelays, loadPublishRelays } from "@/lib/talkscript/issue";
 import type { ChannelPrefill } from "./utils";
@@ -83,44 +81,17 @@ function ChannelOpenDialogBody({
         </DialogDescription>
       </DialogHeader>
 
-      <div className="space-y-2">
-        <Label htmlFor="channel-id">チャンネル ID (hex)</Label>
-        <Input
-          id="channel-id"
-          value={channelId}
-          onChange={(e) => setChannelId(e.target.value)}
-          placeholder="64文字のhex"
-          className="font-mono text-xs"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="channel-key">
-          チャンネル鍵 (hex・この端末にのみ保持)
-        </Label>
-        <Input
-          id="channel-key"
-          type="password"
-          value={channelKey}
-          onChange={(e) => setChannelKey(e.target.value)}
-          placeholder="64文字のhex"
-          className="font-mono text-xs"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="channel-epoch">エポック</Label>
-        <Input
-          id="channel-epoch"
-          value={epoch}
-          onChange={(e) => setEpoch(e.target.value)}
-          placeholder="0"
-          className="font-mono text-xs w-32"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>購読リレー ({relays.length})</Label>
-        <RelayListEditor relays={relays} onChange={setRelays} />
-      </div>
+      <CoordinateFields
+        idPrefix="channel-open"
+        channelId={channelId}
+        onChannelId={setChannelId}
+        channelKey={channelKey}
+        onChannelKey={setChannelKey}
+        epoch={epoch}
+        onEpoch={setEpoch}
+        relays={relays}
+        onRelays={setRelays}
+      />
 
       {error && (
         <Alert variant="destructive">

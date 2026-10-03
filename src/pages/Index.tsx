@@ -42,7 +42,10 @@ const Index = () => {
   const t = useTalkScript();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [issueOpen, setIssueOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
+  const [importDialog, setImportDialog] = useState<{
+    open: boolean;
+    channelPrefill?: ChannelPrefill;
+  }>({ open: false });
   const [tab, setTab] = useState("chat");
   const [channelSession, setChannelSession] = useState<ChannelSession | null>(
     null,
@@ -138,8 +141,8 @@ const Index = () => {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setImportOpen(true)}
-            title="nevent / note / naddr から Nostr イベントを取り込む"
+            onClick={() => setImportDialog({ open: true })}
+            title="nevent / note / naddr / Concord チャンネルから Nostr イベントを取り込む"
           >
             <Antenna className="h-3.5 w-3.5 mr-1" />
             Nostr 取り込み
@@ -239,6 +242,9 @@ const Index = () => {
                   setChannelDialog({ open: true, prefill });
                   setTab("channel");
                 }}
+                onImportChannel={(prefill) => {
+                  setImportDialog({ open: true, channelPrefill: prefill });
+                }}
                 onResent={(result) => {
                   t.addIssueRecord(result.record);
                   const sent = Object.values(result.record.results);
@@ -259,6 +265,18 @@ const Index = () => {
                 session={channelSession}
                 onOpenRequest={() => setChannelDialog({ open: true })}
                 onClose={() => setChannelSession(null)}
+                onImportScript={(script, warnings) => {
+                  t.importScript(script);
+                  setTab("chat");
+                  toast({
+                    title: "Concord チャンネルから台本を復元しました",
+                    description:
+                      `${script.lines.length} 行 · ${script.personas.length} ペルソナ` +
+                      (warnings.length > 0
+                        ? ` · 警告 ${warnings.length} 件`
+                        : ""),
+                  });
+                }}
               />
             </TabsContent>
           </Tabs>
@@ -272,11 +290,15 @@ const Index = () => {
       </main>
 
       <ImportEventsDialog
-        open={importOpen}
-        onOpenChange={setImportOpen}
+        open={importDialog.open}
+        onOpenChange={(open) =>
+          setImportDialog((d) => ({ ...d, open }))
+        }
+        channelPrefill={importDialog.channelPrefill}
         onImport={(script, warnings) => {
           t.importScript(script);
-          setImportOpen(false);
+          setImportDialog({ open: false });
+          setTab("chat");
           toast({
             title: "Nostr イベントから台本を復元しました",
             description:
