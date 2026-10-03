@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ExternalLink, Send } from "lucide-react";
+import { ExternalLink, MailOpen, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import {
   type ReissueResult,
 } from "@/lib/talkscript/reissue";
 import type { TalkScript } from "@/lib/talkscript/types";
+import type { ChannelPrefill } from "@/components/channel/utils";
 import { eventStore, pool } from "@/services/nostr";
 import { formatTime } from "./utils";
 
@@ -22,6 +23,9 @@ interface Props {
   script: TalkScript;
   /** Called with the new record after a resend completes. */
   onResent: (result: ReissueResult) => void;
+  /** Opens the Concord channel reader for a concord record's coordinate
+   * (channelId/epoch from record.params; channelKey is re-entered). */
+  onOpenChannel?: (prefill: ChannelPrefill) => void;
 }
 
 /**
@@ -30,7 +34,7 @@ interface Props {
  * records with a rootId — the preset's client links. Eligible records
  * (plain, unbound, fully-signable) offer a resend action.
  */
-export function IssueHistoryView({ script, onResent }: Props) {
+export function IssueHistoryView({ script, onResent, onOpenChannel }: Props) {
   const records = [...(script.issues ?? [])].reverse();
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [resendError, setResendError] = useState<{
@@ -87,6 +91,8 @@ export function IssueHistoryView({ script, onResent }: Props) {
                 const links = issueLinks(record);
                 const blockReason = resendBlockReason(script, record);
                 const busy = resendingId === record.id;
+                const isConcord =
+                  getIssuePreset(record.preset)?.envelope === "concord";
                 return (
                   <li
                     key={record.id}
@@ -148,6 +154,24 @@ export function IssueHistoryView({ script, onResent }: Props) {
                         <Send className="h-3 w-3 mr-1" />
                         {busy ? "再送信中…" : "再送信"}
                       </Button>
+                      {isConcord && onOpenChannel && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 text-xs px-2"
+                          onClick={() =>
+                            onOpenChannel({
+                              channelId: record.params?.channelId,
+                              epoch: record.params?.epoch ?? "0",
+                              relays: record.relays,
+                            })
+                          }
+                          title="このチャンネル座標で読み側を開きます（チャンネル鍵は再入力）"
+                        >
+                          <MailOpen className="h-3 w-3 mr-1" />
+                          開く
+                        </Button>
+                      )}
                       {blockReason && (
                         <span className="text-muted-foreground">
                           {blockReason}

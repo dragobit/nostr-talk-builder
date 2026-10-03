@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { getPublicKey, type NostrEvent } from "nostr-tools";
-import { X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,11 +17,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   aggregateResults,
   createIssueRecord,
-  dedupeRelays,
   ISSUE_PRESETS,
   issueLinks,
   loadPublishRelays,
-  normalizeRelayInput,
   publishToRelays,
   recordableParams,
   savePublishRelays,
@@ -41,6 +38,7 @@ import {
 import { buildRumor, sealRumor, wrapSeal } from "@/lib/concord/envelope";
 import { deriveChannelStream, mintChannel } from "@/lib/concord/derive";
 import type { CompiledTalk, TalkScript } from "@/lib/talkscript/types";
+import { RelayListEditor } from "./RelayListEditor";
 import { eventStore, pool } from "@/services/nostr";
 
 interface IssueDialogProps {
@@ -84,8 +82,6 @@ function IssueDialogBody({
   const [preset, setPreset] = useState<IssuePresetId>("public-plain");
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [relays, setRelays] = useState<string[]>(loadPublishRelays);
-  const [relayInput, setRelayInput] = useState("");
-  const [relayError, setRelayError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<PublishOutcome | null>(null);
@@ -152,19 +148,6 @@ function IssueDialogBody({
   const updateRelays = (next: string[]) => {
     setRelays(next);
     savePublishRelays(next);
-  };
-
-  const addRelay = () => {
-    const normalized = normalizeRelayInput(relayInput);
-    if (!normalized) {
-      setRelayError("ws:// または wss:// の URL を入力してください");
-      return;
-    }
-    setRelayError(null);
-    setRelayInput("");
-    // dedupe by canonical url — "wss://a" and "wss://a/" are the same relay
-    const next = dedupeRelays([...relays, normalized]);
-    if (next.length > relays.length) updateRelays(next);
   };
 
   const canExecute =
@@ -447,60 +430,11 @@ function IssueDialogBody({
       {ISSUE_PRESETS[preset].publishes && (
         <div className="space-y-2">
           <Label>発行先リレー ({relays.length})</Label>
-          {relays.length === 0 ? (
-            <p className="text-xs text-muted-foreground border border-dashed rounded p-2 text-center">
-              リレーがありません。下から追加してください。
-            </p>
-          ) : (
-            <ul className="space-y-1">
-              {relays.map((relay) => (
-                <li
-                  key={relay}
-                  className="flex items-center gap-2 rounded bg-muted px-2 py-1"
-                >
-                  <code className="flex-1 text-xs font-mono select-all">
-                    {relay}
-                  </code>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() =>
-                      updateRelays(relays.filter((r) => r !== relay))
-                    }
-                    disabled={running}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="flex gap-2">
-            <Input
-              value={relayInput}
-              onChange={(e) => setRelayInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addRelay();
-                }
-              }}
-              placeholder="wss://relay.example.com"
-              className="flex-1"
-              disabled={running}
-            />
-            <Button
-              variant="outline"
-              onClick={addRelay}
-              disabled={!relayInput.trim() || running}
-            >
-              追加
-            </Button>
-          </div>
-          {relayError && (
-            <p className="text-xs text-destructive">{relayError}</p>
-          )}
+          <RelayListEditor
+            relays={relays}
+            onChange={updateRelays}
+            disabled={running}
+          />
           <p className="text-xs text-muted-foreground">
             {isWire
               ? wirePreview
