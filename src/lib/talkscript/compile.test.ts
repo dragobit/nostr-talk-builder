@@ -20,18 +20,33 @@ function fixture(): TalkScript {
     ],
     lines: [
       { id: "l1", personaId: "pa", content: "first", offsetSec: 0 },
-      { id: "l2", personaId: "pb", content: "second", offsetSec: 60, replyTo: "l1" },
-      { id: "l3", personaId: "pa", content: "third", offsetSec: 120, replyTo: "l2" },
+      {
+        id: "l2",
+        personaId: "pb",
+        content: "second",
+        offsetSec: 60,
+        replyTo: "l1",
+      },
+      {
+        id: "l3",
+        personaId: "pa",
+        content: "third",
+        offsetSec: 120,
+        replyTo: "l2",
+      },
       { id: "l4", personaId: "pc", content: "unsigned", offsetSec: 180 },
     ],
   };
 }
 
 describe("compileScript", () => {
-  it("compiles lines[0] to a kind 11 root with a subject tag", () => {
+  it("compiles lines[0] to a kind 11 root with subject+title tags", () => {
     const { events } = compileScript(fixture());
     expect(events[0].kind).toBe(11);
-    expect(events[0].tags).toEqual([["subject", "テスト会話"]]);
+    expect(events[0].tags).toEqual([
+      ["subject", "テスト会話"],
+      ["title", "テスト会話"],
+    ]);
     expect(events[0].content).toBe("first");
     expect(events[0].created_at).toBe(1_700_000_000);
   });

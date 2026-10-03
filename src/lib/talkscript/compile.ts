@@ -20,20 +20,22 @@ export class CompileError extends Error {}
 function toCommentPointer(
   event: Pick<NostrEvent, "id" | "kind" | "pubkey">,
 ): CommentEventPointer {
-  return { type: "event", id: event.id, kind: event.kind, pubkey: event.pubkey };
+  return {
+    type: "event",
+    id: event.id,
+    kind: event.kind,
+    pubkey: event.pubkey,
+  };
 }
 
-function draft(
-  partial: Omit<DraftEvent, "id">,
-): DraftEvent {
+function draft(partial: Omit<DraftEvent, "id">): DraftEvent {
   return { ...partial, id: getEventHash(partial as NostrEvent) };
 }
 
 function assertValid(script: TalkScript): Map<string, string> {
   if (script.version !== TALK_SCRIPT_VERSION)
     throw new CompileError(`unsupported script version ${script.version}`);
-  if (script.lines.length === 0)
-    throw new CompileError("script has no lines");
+  if (script.lines.length === 0) throw new CompileError("script has no lines");
 
   const pubkeys = new Map<string, string>();
   for (const persona of script.personas) {
@@ -85,7 +87,12 @@ export function compileScript(script: TalkScript): CompiledTalk {
         kind: THREAD_KIND,
         pubkey,
         created_at,
-        tags: [["subject", script.title]],
+        // NIP-7D asks for `title` (SHOULD); `subject` stays for clients
+        // that read the legacy tag
+        tags: [
+          ["subject", script.title],
+          ["title", script.title],
+        ],
         content: line.content,
       });
     }
