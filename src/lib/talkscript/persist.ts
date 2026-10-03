@@ -29,6 +29,7 @@ const issueRecordSchema = z.object({
   envelope: z.literal("plain"),
   relays: z.array(z.string()),
   rootId: z.string().optional(),
+  params: z.record(z.string(), z.string()).optional(),
   results: z.record(z.string(), z.string()),
 });
 
