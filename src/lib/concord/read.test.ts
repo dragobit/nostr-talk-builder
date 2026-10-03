@@ -7,6 +7,7 @@ import {
   type NostrEvent,
 } from "nostr-tools";
 import { hexToBytes } from "nostr-tools/utils";
+import { AuthRequiredError } from "applesauce-relay";
 import { deriveChannelStream } from "./derive";
 import {
   buildRumor,
@@ -20,6 +21,8 @@ import {
   createWrapOpener,
   fetchRumors,
   foldRumors,
+  streamAuthSigner,
+  withStreamAuth,
   type FetchWraps,
 } from "./read";
 
@@ -224,6 +227,38 @@ describe("fetchRumors", () => {
     // until=499 so wraps at t=500 beyond the cap are not fetched
   });
 
+  it("flags the oldest second of every full page, even across seconds", async () => {
+    // page spans two seconds (500, 400) but is full: wraps in second
+    // 400 beyond the page cap are dropped by until=399 — the flag must
+    // still fire or the gap is a silent miss
+    const page1 = [500, 400].map((t, i) =>
+      wrapAt(
+        wrapIr(
+          { kind: 9, content: `p1-${i}`, tags: [], created_at: t },
+          SK_A,
+        ).wrap,
+        t,
+      ),
+    );
+    const page2 = [wrapAt(
+      wrapIr(
+        { kind: 9, content: "p2", tags: [], created_at: 300 },
+        SK_B,
+      ).wrap,
+      300,
+    )];
+    const calls: Filter[][] = [];
+    const result = await fetchRumors(
+      channel,
+      ["wss://x"],
+      fetchOf([page1, page2], calls),
+      { pageSize: 2 },
+    );
+    expect(calls[1][0].until).toBe(399);
+    expect(result.saturatedSecond).toBe(400);
+    expect(result.mayHaveMore).toBe(false);
+  });
+
   it("dedupes wraps across relays and pages", async () => {
     const { wrap, rumor } = wrapIr(
       { kind: 9, content: "hi", tags: [], created_at: 100 },
@@ -296,6 +331,93 @@ describe("fetchRumors", () => {
     });
     expect(result.rumors).toBe(store);
     expect(store.size).toBe(2);
+  });
+});
+
+describe("withStreamAuth", () => {
+  const okWrap = wrapAt(
+    wrapIr({ kind: 9, content: "ok", tags: [], created_at: 100 }, SK_A)
+      .wrap,
+    100,
+  );
+
+  it("authenticates once then retries on auth-required errors", async () => {
+    let calls = 0;
+    const fetch: FetchWraps = async () => {
+      calls += 1;
+      if (calls === 1) throw new Error("auth-required: nope");
+      return [okWrap];
+    };
+    const authCalls: string[][] = [];
+    const wrapped = withStreamAuth(fetch, async (relays) => {
+      authCalls.push(relays);
+    });
+    const out = await wrapped(["wss://x"], [{ kinds: [KIND_WRAP] }]);
+    expect(out).toEqual([okWrap]);
+    expect(calls).toBe(2);
+    expect(authCalls).toEqual([["wss://x"]]);
+  });
+
+  it("treats a real AuthRequiredError as auth-required", async () => {
+    let calls = 0;
+    const fetch: FetchWraps = async () => {
+      calls += 1;
+      if (calls === 1) throw new AuthRequiredError("auth-required: x");
+      return [okWrap];
+    };
+    let authed = false;
+    const wrapped = withStreamAuth(fetch, async () => {
+      authed = true;
+    });
+    await wrapped(["wss://x"], [{ kinds: [KIND_WRAP] }]);
+    expect(authed).toBe(true);
+    expect(calls).toBe(2);
+  });
+
+  it("rethrows non-auth errors without authenticating", async () => {
+    const boom = new Error("connection refused");
+    const fetch: FetchWraps = async () => {
+      throw boom;
+    };
+    let authed = false;
+    const wrapped = withStreamAuth(fetch, async () => {
+      authed = true;
+    });
+    await expect(wrapped(["wss://x"], [])).rejects.toBe(boom);
+    expect(authed).toBe(false);
+  });
+
+  it("surfaces an auth-required answer on the retry as-is", async () => {
+    const fail = new AuthRequiredError("auth-required: still");
+    const fetch: FetchWraps = async () => {
+      throw fail;
+    };
+    let authCalls = 0;
+    const wrapped = withStreamAuth(fetch, async () => {
+      authCalls += 1;
+    });
+    await expect(wrapped(["wss://x"], [])).rejects.toBe(fail);
+    expect(authCalls).toBe(1);
+  });
+});
+
+describe("streamAuthSigner", () => {
+  it("signs the AUTH template with the stream key", async () => {
+    const s = stream();
+    const signer = streamAuthSigner(s);
+    const signed = await signer.signEvent({
+      kind: 22242,
+      content: "",
+      tags: [
+        ["relay", "wss://x"],
+        ["challenge", "abc"],
+      ],
+      created_at: 100,
+    });
+    expect(signed.pubkey).toBe(s.pk);
+    expect(signed.kind).toBe(22242);
+    expect(signed.id).toMatch(/^[0-9a-f]{64}$/);
+    expect(signed.sig).toMatch(/^[0-9a-f]{128}$/);
   });
 });
 

@@ -172,9 +172,11 @@ export interface FetchRumorsResult {
   /** until cursor for a follow-up call (set only when mayHaveMore). */
   nextUntil?: number;
   /**
-   * A full page ended inside a single created_at second: any further
-   * wraps in that second were skipped. Documented limit — the
-   * same-second {since:t,until:t} drain is not implemented in v1.
+   * A full page ended at this created_at second: any further wraps in
+   * that second were skipped by the until-cursor step. Documented
+   * limit — the same-second {since:t,until:t} drain is not implemented
+   * in v1. Set on every full-page boundary (the wraps it may hide are
+   * never fetched).
    */
   saturatedSecond?: number;
 }
@@ -248,8 +250,11 @@ export async function fetchRumors(
       break;
     }
     const oldest = Math.min(...wraps.map((w) => w.created_at));
-    const newest = Math.max(...wraps.map((w) => w.created_at));
-    if (oldest === newest) saturatedSecond = oldest;
+    // Paging past `oldest` (until = oldest - 1) drops every other wrap in
+    // that same second — flag it whenever a full page ends, not only when
+    // the whole page sits in one second. The {since:t,until:t} drain that
+    // would recover them is not implemented in v1.
+    saturatedSecond = oldest;
     until = oldest - 1;
     mayHaveMore = true;
   }
