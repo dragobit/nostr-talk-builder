@@ -18,8 +18,12 @@ import { ChatLogView } from "@/components/talklog/ChatLogView";
 import { ThreadTreeView } from "@/components/talklog/ThreadTreeView";
 import { TextDumpView } from "@/components/talklog/TextDumpView";
 import { IssueHistoryView } from "@/components/talklog/IssueHistoryView";
+import { ChannelOpenDialog } from "@/components/channel/ChannelOpenDialog";
+import { ChannelView } from "@/components/channel/ChannelView";
+import type { ChannelPrefill } from "@/components/channel/utils";
 import { ImportEventsDialog } from "@/components/talkscript/ImportEventsDialog";
 import { IssueDialog } from "@/components/talkscript/IssueDialog";
+import type { ChannelSession } from "@/lib/concord/read";
 import { useTalkScript } from "@/hooks/useTalkScript";
 import { toast } from "@/hooks/useToast";
 import {
@@ -39,6 +43,14 @@ const Index = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [issueOpen, setIssueOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [tab, setTab] = useState("chat");
+  const [channelSession, setChannelSession] = useState<ChannelSession | null>(
+    null,
+  );
+  const [channelDialog, setChannelDialog] = useState<{
+    open: boolean;
+    prefill?: ChannelPrefill;
+  }>({ open: false });
   const signable = t.script.personas.some((p) => p.key?.trim());
   const signedCount = t.compiled
     ? t.compiled.events.filter((e) => t.signedIds.has(e.id)).length
@@ -195,12 +207,13 @@ const Index = () => {
           />
         </div>
         <div className="space-y-4">
-          <Tabs defaultValue="chat">
+          <Tabs value={tab} onValueChange={setTab}>
             <TabsList>
               <TabsTrigger value="chat">チャット</TabsTrigger>
               <TabsTrigger value="tree">ツリー</TabsTrigger>
               <TabsTrigger value="dump">ダンプ</TabsTrigger>
               <TabsTrigger value="history">履歴</TabsTrigger>
+              <TabsTrigger value="channel">チャンネル</TabsTrigger>
             </TabsList>
             <TabsContent value="chat">
               <ChatLogView
@@ -222,6 +235,10 @@ const Index = () => {
             <TabsContent value="history">
               <IssueHistoryView
                 script={t.script}
+                onOpenChannel={(prefill) => {
+                  setChannelDialog({ open: true, prefill });
+                  setTab("channel");
+                }}
                 onResent={(result) => {
                   t.addIssueRecord(result.record);
                   const sent = Object.values(result.record.results);
@@ -235,6 +252,13 @@ const Index = () => {
                         : ""),
                   });
                 }}
+              />
+            </TabsContent>
+            <TabsContent value="channel">
+              <ChannelView
+                session={channelSession}
+                onOpenRequest={() => setChannelDialog({ open: true })}
+                onClose={() => setChannelSession(null)}
               />
             </TabsContent>
           </Tabs>
@@ -259,6 +283,18 @@ const Index = () => {
               `${script.lines.length} 行 · ${script.personas.length} ペルソナ` +
               (warnings.length > 0 ? ` · 警告 ${warnings.length} 件` : ""),
           });
+        }}
+      />
+      <ChannelOpenDialog
+        open={channelDialog.open}
+        onOpenChange={(open) =>
+          setChannelDialog((d) => ({ ...d, open }))
+        }
+        prefill={channelDialog.prefill}
+        onOpen={(session) => {
+          setChannelSession(session);
+          setChannelDialog({ open: false });
+          setTab("channel");
         }}
       />
       <IssueDialog
