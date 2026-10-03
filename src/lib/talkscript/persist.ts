@@ -26,7 +26,7 @@ const issueRecordSchema = z.object({
   issuedAt: z.number(),
   preset: z.string().min(1),
   bindings: z.array(z.string()),
-  envelope: z.literal("plain"),
+  envelope: z.enum(["plain", "concord"]),
   relays: z.array(z.string()),
   rootId: z.string().optional(),
   params: z.record(z.string(), z.string()).optional(),

@@ -12,6 +12,7 @@ import {
   loadPublishRelays,
   normalizeRelayInput,
   publishToRelays,
+  recordableParams,
   RELAY_STORAGE_KEY,
   savePublishRelays,
   type IssuePreset,
@@ -73,6 +74,24 @@ describe("IssueRecord persistence", () => {
     expect(restored).toEqual(script);
     expect(restored.issues?.[0].params).toEqual({ groupId: "test-group" });
     expect(restored.issues?.[0].bindings).toEqual(["h"]);
+  });
+
+  it("round-trips a concord-envelope record with channel params", () => {
+    const script = fixture([
+      record({
+        preset: "concord",
+        bindings: ["channel"],
+        envelope: "concord" as const,
+        params: { channelId: "ab".repeat(32), epoch: "0" },
+      }),
+    ]);
+    const restored = deserializeTalkScript(serializeTalkScript(script));
+    expect(restored).toEqual(script);
+    expect(restored.issues?.[0].envelope).toBe("concord");
+    expect(restored.issues?.[0].params).toEqual({
+      channelId: "ab".repeat(32),
+      epoch: "0",
+    });
   });
 
   it("rejects a malformed issue record", () => {
@@ -290,7 +309,7 @@ describe("createIssueRecord", () => {
 describe("ISSUE_PRESETS", () => {
   it("describes every preset on the 3 issuance axes", () => {
     for (const preset of Object.values(ISSUE_PRESETS)) {
-      expect(preset.envelope).toBe("plain");
+      expect(["plain", "concord"]).toContain(preset.envelope);
       expect(Array.isArray(preset.bindings)).toBe(true);
       expect(Array.isArray(preset.clientLinks)).toBe(true);
     }
@@ -335,6 +354,37 @@ describe("ISSUE_PRESETS", () => {
       expect(preset.disabledReason).toBeUndefined();
       expect(preset.params?.map((p) => p.key)).toEqual(["groupId"]);
     }
+  });
+
+  it("enables the concord preset with channel params, key kept secret", () => {
+    const preset: IssuePreset = ISSUE_PRESETS["concord"];
+    expect(preset.publishes).toBe(true);
+    expect(preset.bindings).toEqual(["channel"]);
+    expect(preset.envelope).toBe("concord");
+    expect(preset.wire).toBeUndefined();
+    expect(preset.clientLinks).toEqual([]);
+    expect(preset.mintableChannel).toBe(true);
+    const keys = preset.params?.map((p) => p.key);
+    expect(keys).toEqual(["channelId", "channelKey", "epoch"]);
+    const channelKey = preset.params?.find((p) => p.key === "channelKey");
+    expect(channelKey?.secret).toBe(true);
+    const epoch = preset.params?.find((p) => p.key === "epoch");
+    expect(epoch?.defaultValue).toBe("0");
+    // the secret param never reaches the record
+    expect(
+      recordableParams(preset, {
+        channelId: "ab".repeat(32),
+        channelKey: "cd".repeat(32),
+        epoch: "3",
+      }),
+    ).toEqual({ channelId: "ab".repeat(32), epoch: "3" });
+    // an untouched epoch still records its default
+    expect(
+      recordableParams(preset, {
+        channelId: "ab".repeat(32),
+        channelKey: "cd".repeat(32),
+      }),
+    ).toEqual({ channelId: "ab".repeat(32), epoch: "0" });
   });
 
   it("getIssuePreset returns undefined for unknown ids", () => {
