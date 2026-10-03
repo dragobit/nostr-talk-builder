@@ -61,6 +61,20 @@ describe("IssueRecord persistence", () => {
     expect(restored.issues).toBeUndefined();
   });
 
+  it("round-trips an issue record carrying params", () => {
+    const script = fixture([
+      record({
+        preset: "nip29-chat",
+        bindings: ["h"],
+        params: { groupId: "test-group" },
+      }),
+    ]);
+    const restored = deserializeTalkScript(serializeTalkScript(script));
+    expect(restored).toEqual(script);
+    expect(restored.issues?.[0].params).toEqual({ groupId: "test-group" });
+    expect(restored.issues?.[0].bindings).toEqual(["h"]);
+  });
+
   it("rejects a malformed issue record", () => {
     const bad = record({ envelope: "wrapped" as never });
     const json = serializeTalkScript(fixture([bad]));
@@ -234,7 +248,7 @@ describe("publishToRelays + aggregateResults", () => {
 });
 
 describe("createIssueRecord", () => {
-  it("fills id/issuedAt and freezes bindings+envelope for M3a", () => {
+  it("fills id/issuedAt and defaults bindings to none", () => {
     const rec = createIssueRecord({
       preset: "public-plain",
       relays: ["wss://nos.lol"],
@@ -247,6 +261,19 @@ describe("createIssueRecord", () => {
     expect(rec.relays).toEqual(["wss://nos.lol"]);
     expect(rec.results).toEqual({ ev1: "ok" });
     expect(rec.rootId).toBeUndefined();
+    expect(rec.params).toBeUndefined();
+  });
+
+  it("stores wire bindings and non-secret params", () => {
+    const rec = createIssueRecord({
+      preset: "nip29-chat",
+      relays: ["wss://groups.example.com"],
+      bindings: ["h"],
+      params: { groupId: "test-group" },
+      results: { ev1: "ok" },
+    });
+    expect(rec.bindings).toEqual(["h"]);
+    expect(rec.params).toEqual({ groupId: "test-group" });
   });
 
   it("stores the optional rootId", () => {
@@ -297,6 +324,17 @@ describe("ISSUE_PRESETS", () => {
     );
     expect(disabled.length).toBeGreaterThan(0);
     for (const p of disabled) expect(p.publishes).toBe(false);
+  });
+
+  it("enables the h-bind and nip29-chat wire presets with a groupId param", () => {
+    for (const id of ["h-bind", "nip29-chat"] as const) {
+      const preset: IssuePreset = ISSUE_PRESETS[id];
+      expect(preset.publishes).toBe(true);
+      expect(preset.bindings).toEqual(["h"]);
+      expect(preset.wire).toBe(id);
+      expect(preset.disabledReason).toBeUndefined();
+      expect(preset.params?.map((p) => p.key)).toEqual(["groupId"]);
+    }
   });
 
   it("getIssuePreset returns undefined for unknown ids", () => {

@@ -62,13 +62,25 @@ function assertValid(script: TalkScript): Map<string, string> {
   return pubkeys;
 }
 
+export interface CompileOptions {
+  /**
+   * Extra tags appended to every event's tag list at compile time.
+   * Bindings that change the event set (e.g. a NIP-29 `h` tag) must be
+   * inside the hashed event, so they are injected here — never post-hoc.
+   */
+  extraTags?: string[][];
+}
+
 /**
  * Deterministically compile a script into the IR event set:
  * lines[0] -> kind 11 root, the rest -> kind 1111 comments carrying
  * NIP-22 K/E/P (root scope) + k/e/p (parent item) tags.
  * Unsigned: ids are content hashes, so children can link before signing.
  */
-export function compileScript(script: TalkScript): CompiledTalk {
+export function compileScript(
+  script: TalkScript,
+  options: CompileOptions = {},
+): CompiledTalk {
   const pubkeys = assertValid(script);
 
   const byLineId: Record<string, DraftEvent> = {};
@@ -92,6 +104,7 @@ export function compileScript(script: TalkScript): CompiledTalk {
         tags: [
           ["subject", script.title],
           ["title", script.title],
+          ...(options.extraTags ?? []),
         ],
         content: line.content,
       });
@@ -107,6 +120,7 @@ export function compileScript(script: TalkScript): CompiledTalk {
         toCommentPointer(parentEvent),
         false,
       ),
+      ...(options.extraTags ?? []),
     ];
 
     return draft({
