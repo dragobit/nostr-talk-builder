@@ -20,20 +20,22 @@ export class CompileError extends Error {}
 function toCommentPointer(
   event: Pick<NostrEvent, "id" | "kind" | "pubkey">,
 ): CommentEventPointer {
-  return { type: "event", id: event.id, kind: event.kind, pubkey: event.pubkey };
+  return {
+    type: "event",
+    id: event.id,
+    kind: event.kind,
+    pubkey: event.pubkey,
+  };
 }
 
-function draft(
-  partial: Omit<DraftEvent, "id">,
-): DraftEvent {
+function draft(partial: Omit<DraftEvent, "id">): DraftEvent {
   return { ...partial, id: getEventHash(partial as NostrEvent) };
 }
 
 function assertValid(script: TalkScript): Map<string, string> {
   if (script.version !== TALK_SCRIPT_VERSION)
     throw new CompileError(`unsupported script version ${script.version}`);
-  if (script.lines.length === 0)
-    throw new CompileError("script has no lines");
+  if (script.lines.length === 0) throw new CompileError("script has no lines");
 
   const pubkeys = new Map<string, string>();
   for (const persona of script.personas) {
@@ -60,13 +62,25 @@ function assertValid(script: TalkScript): Map<string, string> {
   return pubkeys;
 }
 
+export interface CompileOptions {
+  /**
+   * Extra tags appended to every event's tag list at compile time.
+   * Bindings that change the event set (e.g. a NIP-29 `h` tag) must be
+   * inside the hashed event, so they are injected here — never post-hoc.
+   */
+  extraTags?: string[][];
+}
+
 /**
  * Deterministically compile a script into the IR event set:
  * lines[0] -> kind 11 root, the rest -> kind 1111 comments carrying
  * NIP-22 K/E/P (root scope) + k/e/p (parent item) tags.
  * Unsigned: ids are content hashes, so children can link before signing.
  */
-export function compileScript(script: TalkScript): CompiledTalk {
+export function compileScript(
+  script: TalkScript,
+  options: CompileOptions = {},
+): CompiledTalk {
   const pubkeys = assertValid(script);
 
   const byLineId: Record<string, DraftEvent> = {};
@@ -85,7 +99,13 @@ export function compileScript(script: TalkScript): CompiledTalk {
         kind: THREAD_KIND,
         pubkey,
         created_at,
-        tags: [["subject", script.title]],
+        // NIP-7D asks for `title` (SHOULD); `subject` stays for clients
+        // that read the legacy tag
+        tags: [
+          ["subject", script.title],
+          ["title", script.title],
+          ...(options.extraTags ?? []),
+        ],
         content: line.content,
       });
     }
@@ -100,6 +120,7 @@ export function compileScript(script: TalkScript): CompiledTalk {
         toCommentPointer(parentEvent),
         false,
       ),
+      ...(options.extraTags ?? []),
     ];
 
     return draft({

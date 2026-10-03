@@ -21,6 +21,27 @@ export interface ClientLink {
   urlTemplate: string;
 }
 
+/** An input field a preset asks the user to fill at issue time. */
+export interface IssueParam {
+  /** Key in the params record handed to the wire compiler. */
+  key: string;
+  label: string;
+  placeholder?: string;
+  /** Render masked and keep the value out of IssueRecord.params. */
+  secret?: boolean;
+  /** Value used when the field is left empty (e.g. epoch "0"). */
+  defaultValue?: string;
+}
+
+/**
+ * Wire-compile modes: the preset publishes a dedicated event set
+ * re-compiled from the script at issue time (M4a), not the canonical IR.
+ */
+export type IssueWireMode = "h-bind" | "nip29-chat";
+
+/** Envelope the signed events are sent under (M4c adds "concord"). */
+export type IssueEnvelope = "plain" | "concord";
+
 export interface IssuePreset {
   label: string;
   description: string;
@@ -28,12 +49,21 @@ export interface IssuePreset {
   publishes: boolean;
   /** Binding axis — all presets are unbound in M3b; M4 adds "h" etc. */
   bindings: string[];
-  /** Envelope axis — "plain" only in M3b; M4 adds "nip59" / "concord". */
-  envelope: "plain";
+  /** Envelope axis — "plain" sends signed events as-is; "concord" wraps them. */
+  envelope: IssueEnvelope;
   /** Expected-client links offered after a successful publish. */
   clientLinks: ClientLink[];
+  /** Input fields rendered when the preset is selected (M4a). */
+  params?: IssueParam[];
+  /** Set when the preset publishes a wire-compiled event set (M4a). */
+  wire?: IssueWireMode;
   /** Set to render the preset unselectable (announces future presets). */
   disabledReason?: string;
+  /**
+   * Render a "mint a fresh channel" button that fills the channel
+   * coordinate params (channelId/channelKey/epoch) with random values.
+   */
+  mintableChannel?: boolean;
 }
 
 /** Issue presets; ids are stored on IssueRecord.preset. */
@@ -149,12 +179,74 @@ export const ISSUE_PRESETS = {
   "h-bind": {
     label: "NIP-29 グループ向け (h 束縛)",
     description:
-      "kind 11/1111 に h タグを付けて NIP-29 グループへ束縛して発行します。",
-    publishes: false,
+      "台本から全イベントに h タグを付けた別イベント集合をコンパイルし直して発行します（正準 IR とは別のイベント id になります）。発行先にはグループが属するリレーのみ指定してください。",
+    publishes: true,
     bindings: ["h"],
     envelope: "plain",
     clientLinks: [],
-    disabledReason: "M4 で実装予定",
+    params: [
+      {
+        key: "groupId",
+        label: "グループ ID",
+        placeholder: "group-id",
+      },
+    ],
+    wire: "h-bind",
+  },
+  "nip29-chat": {
+    label: "NIP-29 グループチャット (kind 9 投影)",
+    description:
+      "全行を kind 9 チャットメッセージに投影して発行します（別イベント集合・kind 11/1111 やタイトルは送信されません）。発行前に各ペルソナの kind 9021 参加要求を送信します。発行先にはグループが属するリレーのみ指定してください。",
+    publishes: true,
+    bindings: ["h"],
+    envelope: "plain",
+    clientLinks: [],
+    params: [
+      {
+        key: "groupId",
+        label: "グループ ID",
+        placeholder: "group-id",
+      },
+    ],
+    wire: "nip29-chat",
+  },
+  concord: {
+    label: "Concord チャンネル (rumor→seal→wrap)",
+    description:
+      "署名済みイベントを Concord エンベロープ (kind 1059 wrap) に包んで発行します。Armada 等の Concord クライアント向け — 公開 reader が無いため、現状の検証は往復復号とリレー到達確認のみです。チャンネル鍵は発行レコードに保存されません。",
+    publishes: true,
+    bindings: ["channel"],
+    envelope: "concord",
+    clientLinks: [],
+    params: [
+      {
+        key: "channelId",
+        label: "チャンネル ID (hex)",
+        placeholder: "64文字のhex",
+      },
+      {
+        key: "channelKey",
+        label: "チャンネル鍵 (hex・レコードに記録されません)",
+        placeholder: "64文字のhex",
+        secret: true,
+      },
+      {
+        key: "epoch",
+        label: "エポック",
+        placeholder: "0",
+        defaultValue: "0",
+      },
+    ],
+    mintableChannel: true,
+  },
+  "channel-bind": {
+    label: "チャンネル束縛 (予定)",
+    description: "channel+epoch 束縛での発行プリセット。",
+    publishes: false,
+    bindings: ["channel"],
+    envelope: "plain",
+    clientLinks: [],
+    disabledReason: "M4b 以降で実装予定",
   },
 } as const satisfies Record<string, IssuePreset>;
 
@@ -174,11 +266,13 @@ export interface IssueRecord {
   preset: string;
   /** Binding axis — reserved for M4, always empty in M3a. */
   bindings: string[];
-  envelope: "plain";
+  envelope: IssueEnvelope;
   /** Relays the signed events were offered to. */
   relays: string[];
   /** kind 11 root event id at issue time (survives later script edits). */
   rootId?: string;
+  /** Non-secret preset parameters used for this issue run (M4a). */
+  params?: Record<string, string>;
   /** event id -> "ok" or a failure reason. */
   results: Record<string, "ok" | string>;
 }
@@ -330,17 +424,42 @@ export function createIssueRecord(input: {
   /** kind 11 root event id, when the root was part of the publish. */
   rootId?: string;
   results: Record<string, "ok" | string>;
+  /** Bindings applied by the wire compile (defaults to none). */
+  bindings?: string[];
+  /** Envelope the events were sent under (defaults to "plain"). */
+  envelope?: IssueEnvelope;
+  /** Non-secret params used for the run (see recordableParams). */
+  params?: Record<string, string>;
 }): IssueRecord {
   return {
     id: crypto.randomUUID(),
     issuedAt: Math.floor(Date.now() / 1000),
     preset: input.preset,
-    bindings: [],
-    envelope: "plain",
+    bindings: [...(input.bindings ?? [])],
+    envelope: input.envelope ?? "plain",
     relays: [...input.relays],
     ...(input.rootId ? { rootId: input.rootId } : {}),
+    ...(input.params ? { params: { ...input.params } } : {}),
     results: { ...input.results },
   };
+}
+
+/**
+ * Params safe to persist on an IssueRecord: entries declared `secret`
+ * by the preset are dropped so credentials never reach storage/export.
+ */
+export function recordableParams(
+  preset: IssuePreset,
+  values: Record<string, string>,
+): Record<string, string> | undefined {
+  if (!preset.params?.length) return undefined;
+  const out: Record<string, string> = {};
+  for (const param of preset.params) {
+    if (param.secret) continue;
+    const value = values[param.key]?.trim() || param.defaultValue;
+    if (value) out[param.key] = value;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /** Fallback for presets without clientLinks (and unknown preset ids):

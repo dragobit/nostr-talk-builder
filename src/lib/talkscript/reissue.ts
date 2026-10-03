@@ -85,8 +85,13 @@ export async function reissueRecord(
   const rootId = compiled.events[0].id;
   const rootChanged = record.rootId !== undefined && record.rootId !== rootId;
 
+  // resend only runs when bindings/envelope are at defaults, but copy the
+  // issuance-channel fields through so the new record describes the same run
   const newRecord = createIssueRecord({
     preset: record.preset,
+    bindings: record.bindings,
+    envelope: record.envelope,
+    params: record.params,
     relays: record.relays,
     rootId,
     results: aggregateResults(outcome),

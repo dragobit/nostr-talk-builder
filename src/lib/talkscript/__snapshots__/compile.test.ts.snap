@@ -5,7 +5,7 @@ exports[`compileScript > is deterministic: same script compiles to identical eve
   {
     "content": "first",
     "created_at": 1700000000,
-    "id": "e6b0c0c2ec6e39f1d6c5e6ffc7bf198ffaed4a978e106abc6f6a5c7d889d9e01",
+    "id": "4e9ec2de18f1b7234afac9f5b1ca15875d67f3b444ad2ab5d918e3bd9e9d0177",
     "kind": 11,
     "pubkey": "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
     "tags": [
@@ -13,18 +13,22 @@ exports[`compileScript > is deterministic: same script compiles to identical eve
         "subject",
         "テスト会話",
       ],
+      [
+        "title",
+        "テスト会話",
+      ],
     ],
   },
   {
     "content": "second",
     "created_at": 1700000060,
-    "id": "943bd1e6affae27df8032d3179f862101dfa21421910246258c2aef7d0608e76",
+    "id": "69483f9ce2e78ad4d1d0f79e181acd12aac5335f8833ea1be1a942296808a8cf",
     "kind": 1111,
     "pubkey": "68680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5",
     "tags": [
       [
         "E",
-        "e6b0c0c2ec6e39f1d6c5e6ffc7bf198ffaed4a978e106abc6f6a5c7d889d9e01",
+        "4e9ec2de18f1b7234afac9f5b1ca15875d67f3b444ad2ab5d918e3bd9e9d0177",
         "",
         "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
       ],
@@ -38,7 +42,7 @@ exports[`compileScript > is deterministic: same script compiles to identical eve
       ],
       [
         "e",
-        "e6b0c0c2ec6e39f1d6c5e6ffc7bf198ffaed4a978e106abc6f6a5c7d889d9e01",
+        "4e9ec2de18f1b7234afac9f5b1ca15875d67f3b444ad2ab5d918e3bd9e9d0177",
         "",
         "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
       ],
@@ -55,13 +59,13 @@ exports[`compileScript > is deterministic: same script compiles to identical eve
   {
     "content": "third",
     "created_at": 1700000120,
-    "id": "f8f7247f9d766740975aa5ac21ea77192e87a7992c1cd506a3e1260128869ab8",
+    "id": "8ab58400dc4cde8329f7e64457e4529831e847464e379a7bb6db7399bde35c84",
     "kind": 1111,
     "pubkey": "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
     "tags": [
       [
         "E",
-        "e6b0c0c2ec6e39f1d6c5e6ffc7bf198ffaed4a978e106abc6f6a5c7d889d9e01",
+        "4e9ec2de18f1b7234afac9f5b1ca15875d67f3b444ad2ab5d918e3bd9e9d0177",
         "",
         "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
       ],
@@ -75,7 +79,7 @@ exports[`compileScript > is deterministic: same script compiles to identical eve
       ],
       [
         "e",
-        "943bd1e6affae27df8032d3179f862101dfa21421910246258c2aef7d0608e76",
+        "69483f9ce2e78ad4d1d0f79e181acd12aac5335f8833ea1be1a942296808a8cf",
         "",
         "68680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5",
       ],
@@ -92,13 +96,13 @@ exports[`compileScript > is deterministic: same script compiles to identical eve
   {
     "content": "unsigned",
     "created_at": 1700000180,
-    "id": "9a85ed51fafb83c045c17db85e140480557a2ec43caff582c01ab4c00ca019cd",
+    "id": "a7baa5e24e67c8126ff02ea68fde4f20890d230a09598b121f294a6989ae4a43",
     "kind": 1111,
     "pubkey": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     "tags": [
       [
         "E",
-        "e6b0c0c2ec6e39f1d6c5e6ffc7bf198ffaed4a978e106abc6f6a5c7d889d9e01",
+        "4e9ec2de18f1b7234afac9f5b1ca15875d67f3b444ad2ab5d918e3bd9e9d0177",
         "",
         "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
       ],
@@ -112,7 +116,7 @@ exports[`compileScript > is deterministic: same script compiles to identical eve
       ],
       [
         "e",
-        "e6b0c0c2ec6e39f1d6c5e6ffc7bf198ffaed4a978e106abc6f6a5c7d889d9e01",
+        "4e9ec2de18f1b7234afac9f5b1ca15875d67f3b444ad2ab5d918e3bd9e9d0177",
         "",
         "6a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
       ],

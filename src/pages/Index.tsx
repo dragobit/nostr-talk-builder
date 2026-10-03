@@ -264,6 +264,7 @@ const Index = () => {
       <IssueDialog
         open={issueOpen}
         onOpenChange={setIssueOpen}
+        script={t.script}
         compiled={t.compiled}
         signedIds={t.signedIds}
         onIssued={(record) => {

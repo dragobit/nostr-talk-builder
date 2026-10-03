@@ -230,7 +230,11 @@ describe("importFromIdentifier", () => {
     // subject wins over title
     expect(imported.title).toBe("foreign subject");
     const [recompiled] = compileScript(imported).events;
-    expect(recompiled.tags).toEqual([["subject", "foreign subject"]]);
+    // M3d: compile emits both subject and title (NIP-7D SHOULD)
+    expect(recompiled.tags).toEqual([
+      ["subject", "foreign subject"],
+      ["title", "foreign subject"],
+    ]);
     expect(recompiled.id).not.toBe(foreignRoot.id);
   });
 
