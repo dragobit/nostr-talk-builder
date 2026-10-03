@@ -332,9 +332,23 @@ describe("ISSUE_PRESETS", () => {
       for (const link of preset.clientLinks) {
         expect(link.label.length).toBeGreaterThan(0);
         expect(link.urlTemplate).toContain("{nevent}");
-        expect(link.urlTemplate.startsWith("https://")).toBe(true);
+        // https:// for web viewers; nostr: is the verified Android
+        // deep-link scheme (Amethyst resolves nostr: URIs directly)
+        expect(
+          ["https://", "nostr:"].some((s) => link.urlTemplate.startsWith(s)),
+        ).toBe(true);
       }
     }
+  });
+
+  it("registers the Amethyst preset with the verified deep link", () => {
+    // C5c verification on Android: nostr:nevent… opens Amethyst's Thread
+    // view; https://njump.me/… resolves to the default browser instead
+    const preset: IssuePreset = ISSUE_PRESETS["amethyst-plain"];
+    expect(preset.clientLinks[0].urlTemplate).toBe("nostr:{nevent}");
+    expect(preset.clientLinks[1].urlTemplate).toBe(
+      "https://njump.me/{nevent}",
+    );
   });
 
   it("offers at least one disabled preset announcing future work", () => {
