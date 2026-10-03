@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { lastValueFrom, timeout, toArray } from "rxjs";
-import { KeyRound, X } from "lucide-react";
+import { FileInput, KeyRound, X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,9 @@ import {
   type ChannelSession,
 } from "@/lib/concord/read";
 import type { FetchWraps } from "@/lib/concord/read";
+import { scriptFromChannel } from "@/lib/concord/import";
+import { ImportError } from "@/lib/talkscript/importer";
+import type { TalkScript } from "@/lib/talkscript/types";
 import { BUBBLE_COLORS, formatTime } from "@/components/talklog/utils";
 import { pool } from "@/services/nostr";
 import type { NostrEvent } from "nostr-tools";
@@ -31,6 +34,9 @@ interface ChannelViewProps {
   onOpenRequest: () => void;
   /** Closes the session (drops the subscription and the store). */
   onClose: () => void;
+  /** Imports the collected rumors as a TalkScript (replaces the
+   * current script). */
+  onImportScript?: (script: TalkScript, warnings: string[]) => void;
 }
 
 /**
@@ -42,6 +48,7 @@ export function ChannelView({
   session,
   onOpenRequest,
   onClose,
+  onImportScript,
 }: ChannelViewProps) {
   if (!session) {
     return (
@@ -70,15 +77,24 @@ export function ChannelView({
   }
   // key forces a fresh reader (fresh store) when the coordinate changes
   const key = `${session.channel.channelIdHex}:${session.channel.epoch.toString()}`;
-  return <ChannelReader key={key} session={session} onClose={onClose} />;
+  return (
+    <ChannelReader
+      key={key}
+      session={session}
+      onClose={onClose}
+      onImportScript={onImportScript}
+    />
+  );
 }
 
 function ChannelReader({
   session,
   onClose,
+  onImportScript,
 }: {
   session: ChannelSession;
   onClose: () => void;
+  onImportScript?: (script: TalkScript, warnings: string[]) => void;
 }) {
   // mutable channel state — rumors live in a dedicated store, never in
   // the app EventStore (rumors are unsigned)
@@ -89,6 +105,7 @@ function ChannelReader({
   const [fetching, setFetching] = useState(true);
   const [progress, setProgress] = useState(0);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const [mayHaveMore, setMayHaveMore] = useState(false);
   const [saturatedSecond, setSaturatedSecond] = useState<
     number | undefined
@@ -221,10 +238,41 @@ function ChannelReader({
             {session.channel.channelIdHex.slice(0, 12)}… · epoch{" "}
             {session.channel.epoch.toString()}
           </code>
+          {onImportScript && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-xs px-2 ml-auto"
+              disabled={store.size === 0}
+              title="開封済みの rumor を台本として取り込みます（現在の台本は置き換えられます）"
+              onClick={() => {
+                setImportError(null);
+                try {
+                  const { script, warnings } = scriptFromChannel(
+                    store.values(),
+                    session.channel,
+                    session.stream.pk,
+                  );
+                  onImportScript(script, warnings);
+                } catch (e) {
+                  setImportError(
+                    e instanceof ImportError
+                      ? e.message
+                      : e instanceof Error
+                        ? e.message
+                        : "台本への取り込みに失敗しました",
+                  );
+                }
+              }}
+            >
+              <FileInput className="h-3 w-3 mr-1" />
+              台本に取り込む
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 ml-auto"
+            className={cn("h-6 w-6", !onImportScript && "ml-auto")}
             onClick={onClose}
             title="チャンネルを閉じる"
           >
@@ -243,6 +291,11 @@ function ChannelReader({
             <AlertDescription>
               履歴の取得に失敗しました — {fetchError}
             </AlertDescription>
+          </Alert>
+        )}
+        {importError && (
+          <Alert variant="destructive">
+            <AlertDescription>{importError}</AlertDescription>
           </Alert>
         )}
         {saturatedSecond !== undefined && (

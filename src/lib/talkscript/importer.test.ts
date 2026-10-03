@@ -78,14 +78,28 @@ interface StubFetch {
   calls: { relays: string[]; filters: Filter[] }[];
 }
 
-/** FetchEvents backed by an in-memory event set (pool.request semantics). */
+/**
+ * FetchEvents backed by an in-memory event set (pool.request semantics).
+ * Applies each filter's `limit` to that filter's matches — a relay only
+ * returns up to `limit` events per filter.
+ */
 function stubFetch(events: NostrEvent[]): StubFetch {
   const calls: StubFetch["calls"] = [];
   return {
     calls,
     fetch: async (relays, filters) => {
       calls.push({ relays, filters });
-      return events.filter((e) => matchFilters(filters, e));
+      const seen = new Set<string>();
+      const out: NostrEvent[] = [];
+      for (const filter of filters) {
+        const matched = events.filter((e) => matchFilters([filter], e));
+        for (const e of filter.limit ? matched.slice(0, filter.limit) : matched) {
+          if (seen.has(e.id)) continue;
+          seen.add(e.id);
+          out.push(e);
+        }
+      }
+      return out;
     },
   };
 }
@@ -99,17 +113,23 @@ function failingFetch(message: string): FetchEvents {
 describe("decodeIdentifier", () => {
   const id = "f".repeat(64);
 
-  it("decodes nevent with relay hints", () => {
+  it("decodes nevent with relay hints (no kind hint → unfiltered ids)", () => {
     const nevent = nip19.neventEncode({ id, relays: ["wss://nos.lol"] });
     const decoded = decodeIdentifier(nevent);
-    expect(decoded.rootFilter).toEqual({ ids: [id], kinds: [11] });
+    expect(decoded.targetFilter).toEqual({ ids: [id] });
     expect(decoded.relays).toEqual(["wss://nos.lol/"]);
+  });
+
+  it("uses the nevent kind hint to narrow the first query", () => {
+    const nevent = nip19.neventEncode({ id, kind: 1 });
+    const decoded = decodeIdentifier(nevent);
+    expect(decoded.targetFilter).toEqual({ ids: [id], kinds: [1] });
   });
 
   it("decodes note and falls back to publish relays", () => {
     localStorage.clear();
     const decoded = decodeIdentifier(nip19.noteEncode(id));
-    expect(decoded.rootFilter).toEqual({ ids: [id], kinds: [11] });
+    expect(decoded.targetFilter).toEqual({ ids: [id] });
     expect(decoded.relays).toEqual(DEFAULT_PUBLISH_RELAYS);
   });
 
@@ -121,7 +141,7 @@ describe("decodeIdentifier", () => {
       relays: ["wss://relay.example.com"],
     });
     const decoded = decodeIdentifier(naddr);
-    expect(decoded.rootFilter).toEqual({
+    expect(decoded.targetFilter).toEqual({
       kinds: [11],
       authors: ["a".repeat(64)],
       "#d": ["thread-1"],
@@ -464,7 +484,8 @@ describe("importFromIdentifier", () => {
     expect(relays).toEqual([hint + "/"]);
     expect(calls).toHaveLength(2);
     expect(calls[0].relays).toEqual([hint + "/"]);
-    expect(calls[0].filters).toEqual([{ ids: [published[0].id], kinds: [11] }]);
+    // no kind hint in the nevent → detection query is unfiltered
+    expect(calls[0].filters).toEqual([{ ids: [published[0].id] }]);
     expect(calls[1].filters).toEqual([
       { kinds: [1111], "#E": [published[0].id] },
     ]);
@@ -524,6 +545,265 @@ describe("importFromIdentifier", () => {
     const laxFetch: FetchEvents = async () => [root];
     const { script: imported } = await importFromIdentifier(naddr, laxFetch);
     expect(imported.lines).toHaveLength(1);
+  });
+});
+
+describe("kind 1 / NIP-10 thread import", () => {
+  const note = (
+    content: string,
+    key: string,
+    created_at: number,
+    tags: string[][] = [],
+  ): NostrEvent =>
+    finalizeEvent(
+      { kind: 1, content, tags, created_at },
+      hexToBytes(key),
+    );
+
+  const T0 = 1_700_000_000;
+
+  /** Marked NIP-10 thread: root, direct reply (root-only tag), nested
+   * reply (root+reply), plus an e-mention of the root that must be
+   * ignored. */
+  function markedThread() {
+    const root = note("k1 root post", KEY_A, T0);
+    const direct = note("k1 direct reply", KEY_B, T0 + 60, [
+      ["e", root.id, "", "root"],
+    ]);
+    const nested = note("k1 nested reply", KEY_A, T0 + 120, [
+      ["e", root.id, "", "root"],
+      ["e", direct.id, "", "reply", "b".repeat(64)],
+    ]);
+    // mentions the root but is not part of the thread structure
+    const mentioner = note("k1 unrelated mention", KEY_B, T0 + 150, [
+      ["e", root.id, "", "mention"],
+    ]);
+    return { root, direct, nested, mentioner };
+  }
+
+  it("imports a marked thread by its root note", async () => {
+    const { root, direct, nested, mentioner } = markedThread();
+    const { fetch } = stubFetch([root, direct, nested, mentioner]);
+
+    const { script: imported, warnings } = await importFromIdentifier(
+      nip19.noteEncode(root.id),
+      fetch,
+    );
+    expect(imported.lines.map((l) => l.content)).toEqual([
+      "k1 root post",
+      "k1 direct reply",
+      "k1 nested reply",
+    ]);
+    expect(imported.lines[2].replyTo).toBe(imported.lines[1].id);
+    expect(imported.personas.map((p) => p.pubkey)).toEqual([
+      getPublicKey(hexToBytes(KEY_A)),
+      getPublicKey(hexToBytes(KEY_B)),
+    ]);
+    expect(imported.baseTimeSec).toBe(T0);
+    expect(imported.title).toBe("k1 root post");
+    // kind-1 sources are inherently a fork (recompile → kind 11 + 1111)
+    expect(warnings.some((w) => w.includes("kind 11"))).toBe(true);
+    expect(warnings.some((w) => w.includes("フォーク"))).toBe(true);
+  });
+
+  it("resolves the root when the identifier points mid-thread", async () => {
+    const { root, direct, nested } = markedThread();
+    const { fetch, calls } = stubFetch([root, direct, nested]);
+
+    const { script: imported } = await importFromIdentifier(
+      nip19.noteEncode(nested.id),
+      fetch,
+    );
+    // nested → rootId via its root marker → ids fetch of the root →
+    // then the #e descendant query
+    expect(calls[0].filters).toEqual([{ ids: [nested.id] }]);
+    expect(calls[1].filters).toEqual([{ ids: [root.id], kinds: [1] }]);
+    expect(calls[2].filters).toEqual([
+      { kinds: [1], "#e": [root.id], limit: 200 },
+    ]);
+    expect(imported.lines.map((l) => l.content)).toEqual([
+      "k1 root post",
+      "k1 direct reply",
+      "k1 nested reply",
+    ]);
+  });
+
+  it("walks the reply chain when the target has only a reply marker", async () => {
+    const root = note("walkup root", KEY_A, T0);
+    const mid = note("walkup mid", KEY_B, T0 + 10, [
+      ["e", root.id, "", "root"],
+    ]);
+    // a reply with only a "reply" marker — no root reference
+    const leaf = note("walkup leaf", KEY_A, T0 + 20, [
+      ["e", mid.id, "", "reply"],
+    ]);
+    const { fetch, calls } = stubFetch([root, mid, leaf]);
+
+    const { script: imported } = await importFromIdentifier(
+      nip19.noteEncode(leaf.id),
+      fetch,
+    );
+    // leaf → parent mid → mid's root marker → root fetch → descendants
+    expect(calls[1].filters).toEqual([{ ids: [mid.id], kinds: [1] }]);
+    expect(calls[2].filters).toEqual([{ ids: [root.id], kinds: [1] }]);
+    expect(imported.lines).toHaveLength(3);
+    expect(imported.lines[2].replyTo).toBe(imported.lines[1].id);
+  });
+
+  it("interprets the deprecated positional form (first e = root, last e = parent)", async () => {
+    const root = note("legacy root", KEY_A, T0);
+    const direct = note("legacy direct", KEY_B, T0 + 10, [
+      ["e", root.id, "wss://relay.example.com"],
+    ]);
+    // [root, mention, parent] — the middle e is a mention, ignored
+    const nested = note("legacy nested", KEY_A, T0 + 20, [
+      ["e", root.id],
+      ["e", "d".repeat(64)],
+      ["e", direct.id],
+    ]);
+    const { fetch } = stubFetch([root, direct, nested]);
+
+    const { script: imported } = await importFromIdentifier(
+      nip19.noteEncode(root.id),
+      fetch,
+    );
+    expect(imported.lines.map((l) => l.content)).toEqual([
+      "legacy root",
+      "legacy direct",
+      "legacy nested",
+    ]);
+    expect(imported.lines[2].replyTo).toBe(imported.lines[1].id);
+  });
+
+  it("excludes events that merely mention the root", async () => {
+    const { root, direct, nested, mentioner } = markedThread();
+    const { fetch } = stubFetch([root, direct, nested, mentioner]);
+    const { script: imported } = await importFromIdentifier(
+      nip19.noteEncode(root.id),
+      fetch,
+    );
+    expect(imported.lines.map((l) => l.content)).not.toContain(
+      "k1 unrelated mention",
+    );
+  });
+
+  it("flattens replies deeper than the depth cap under the root with a warning", async () => {
+    const root = note("deep root", KEY_A, T0);
+    const chain = [root];
+    for (let i = 1; i <= 6; i++) {
+      chain.push(
+        note(`deep ${i}`, KEY_A, T0 + i, [
+          ["e", root.id, "", "root"],
+          ["e", chain[i - 1].id, "", "reply"],
+        ]),
+      );
+    }
+    const { fetch } = stubFetch(chain);
+    const { script: imported, warnings } = await importFromIdentifier(
+      nip19.noteEncode(root.id),
+      fetch,
+    );
+    expect(imported.lines).toHaveLength(7);
+    // depth 1-4 nest; depth 5+ flattens to root
+    const nestedIds = imported.lines
+      .slice(1)
+      .filter((l) => l.replyTo)
+      .map((l) => l.replyTo);
+    expect(nestedIds).toHaveLength(4);
+    expect(warnings.some((w) => w.includes("深さ上限"))).toBe(true);
+  });
+
+  it("warns when the descendant query hits the limit", async () => {
+    const root = note("big root", KEY_A, T0);
+    const replies = Array.from({ length: 210 }, (_, i) =>
+      note(`bulk ${i}`, KEY_B, T0 + 100 + i, [["e", root.id, "", "root"]]),
+    );
+    const { fetch } = stubFetch([root, ...replies]);
+    const { script: imported, warnings } = await importFromIdentifier(
+      nip19.noteEncode(root.id),
+      fetch,
+    );
+    // only the first 200 (filter limit) are collected
+    expect(imported.lines).toHaveLength(201);
+    expect(warnings.some((w) => w.includes("打ち切り"))).toBe(true);
+  });
+
+  it("attaches replies whose parent is missing under the root with a warning", async () => {
+    const { root, direct } = markedThread();
+    // the parent is nowhere to be found — its child falls back to root
+    const orphanChild = note("k1 orphan child", KEY_B, T0 + 300, [
+      ["e", root.id, "", "root"],
+      ["e", "c".repeat(64), "", "reply"],
+    ]);
+    const { fetch } = stubFetch([root, direct, orphanChild]);
+    const { script: imported, warnings } = await importFromIdentifier(
+      nip19.noteEncode(root.id),
+      fetch,
+    );
+    const line = imported.lines.find((l) => l.content === "k1 orphan child")!;
+    expect(line.replyTo).toBeUndefined();
+    expect(warnings.some((w) => w.includes("収集セットに無い"))).toBe(true);
+  });
+
+  it("clamps a reply older than the root to offset 0 with a warning", async () => {
+    const root = note("k1 time root", KEY_A, T0);
+    const early = note("k1 early reply", KEY_B, T0 - 500, [
+      ["e", root.id, "", "root"],
+    ]);
+    const { fetch } = stubFetch([root, early]);
+    const { script: imported, warnings } = await importFromIdentifier(
+      nip19.noteEncode(root.id),
+      fetch,
+    );
+    expect(imported.lines[1].offsetSec).toBe(0);
+    expect(warnings.some((w) => w.includes("ルートより前"))).toBe(true);
+  });
+
+  it("throws when the referenced root is unreachable", async () => {
+    const leaf = note("k1 dangling leaf", KEY_A, T0, [
+      ["e", "e".repeat(64), "", "root"],
+    ]);
+    const { fetch } = stubFetch([leaf]);
+    await expect(
+      importFromIdentifier(nip19.noteEncode(leaf.id), fetch),
+    ).rejects.toThrow(/見つかりません/);
+  });
+
+  it("throws for unsupported target kinds", async () => {
+    const react = finalizeEvent(
+      {
+        kind: 7,
+        content: "+",
+        tags: [],
+        created_at: T0,
+      },
+      hexToBytes(KEY_A),
+    );
+    const { fetch } = stubFetch([react]);
+    await expect(
+      importFromIdentifier(nip19.noteEncode(react.id), fetch),
+    ).rejects.toThrow(/未対応のイベント kind 7/);
+  });
+
+  it("uses the nevent kind hint for the detection query", async () => {
+    const { root, direct, nested } = markedThread();
+    const { fetch, calls } = stubFetch([root, direct, nested]);
+    await importFromIdentifier(
+      nip19.neventEncode({ id: root.id, kind: 1 }),
+      fetch,
+    );
+    expect(calls[0].filters).toEqual([{ ids: [root.id], kinds: [1] }]);
+  });
+
+  it("still imports a kind 11 thread when the note kind hint says 11", async () => {
+    const script = fixture();
+    const published = signedEvents(script);
+    const { fetch } = stubFetch(published);
+    const { script: imported } = await importFromIdentifier(
+      nip19.neventEncode({ id: published[0].id, kind: 11 }),
+      fetch,
+    );
+    expect(imported.lines).toHaveLength(4);
   });
 });
 
