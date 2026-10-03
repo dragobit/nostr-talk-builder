@@ -1,6 +1,13 @@
 import { useRef, useState } from "react";
 import { useSeoMeta } from "@unhead/react";
-import { Download, PenLine, RefreshCw, Send, Upload } from "lucide-react";
+import {
+  Antenna,
+  Download,
+  PenLine,
+  RefreshCw,
+  Send,
+  Upload,
+} from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +18,7 @@ import { ChatLogView } from "@/components/talklog/ChatLogView";
 import { ThreadTreeView } from "@/components/talklog/ThreadTreeView";
 import { TextDumpView } from "@/components/talklog/TextDumpView";
 import { IssueHistoryView } from "@/components/talklog/IssueHistoryView";
+import { ImportEventsDialog } from "@/components/talkscript/ImportEventsDialog";
 import { IssueDialog } from "@/components/talkscript/IssueDialog";
 import { useTalkScript } from "@/hooks/useTalkScript";
 import { toast } from "@/hooks/useToast";
@@ -30,6 +38,7 @@ const Index = () => {
   const t = useTalkScript();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [issueOpen, setIssueOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const signable = t.script.personas.some((p) => p.key?.trim());
   const signedCount = t.compiled
     ? t.compiled.events.filter((e) => t.signedIds.has(e.id)).length
@@ -113,6 +122,15 @@ const Index = () => {
           >
             <Upload className="h-3.5 w-3.5 mr-1" />
             インポート
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setImportOpen(true)}
+            title="nevent / note / naddr から Nostr イベントを取り込む"
+          >
+            <Antenna className="h-3.5 w-3.5 mr-1" />
+            Nostr 取り込み
           </Button>
           <input
             ref={fileInputRef}
@@ -202,7 +220,22 @@ const Index = () => {
               <TextDumpView compiled={t.compiled} />
             </TabsContent>
             <TabsContent value="history">
-              <IssueHistoryView issues={t.script.issues} />
+              <IssueHistoryView
+                script={t.script}
+                onResent={(result) => {
+                  t.addIssueRecord(result.record);
+                  const sent = Object.values(result.record.results);
+                  const ok = sent.filter((r) => r === "ok").length;
+                  toast({
+                    title: "再送信しました",
+                    description:
+                      `${ok}/${sent.length} 件 ok` +
+                      (result.rootChanged
+                        ? " — ルート id が元レコードと異なります（台本が変更されています）"
+                        : ""),
+                  });
+                }}
+              />
             </TabsContent>
           </Tabs>
           <p className="text-xs text-muted-foreground px-1">
@@ -214,6 +247,20 @@ const Index = () => {
         </div>
       </main>
 
+      <ImportEventsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImport={(script, warnings) => {
+          t.importScript(script);
+          setImportOpen(false);
+          toast({
+            title: "Nostr イベントから台本を復元しました",
+            description:
+              `${script.lines.length} 行 · ${script.personas.length} ペルソナ` +
+              (warnings.length > 0 ? ` · 警告 ${warnings.length} 件` : ""),
+          });
+        }}
+      />
       <IssueDialog
         open={issueOpen}
         onOpenChange={setIssueOpen}
