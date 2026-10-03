@@ -29,6 +29,8 @@ export interface IssueParam {
   placeholder?: string;
   /** Render masked and keep the value out of IssueRecord.params. */
   secret?: boolean;
+  /** Value used when the field is left empty (e.g. epoch "0"). */
+  defaultValue?: string;
 }
 
 /**
@@ -37,6 +39,9 @@ export interface IssueParam {
  */
 export type IssueWireMode = "h-bind" | "nip29-chat";
 
+/** Envelope the signed events are sent under (M4c adds "concord"). */
+export type IssueEnvelope = "plain" | "concord";
+
 export interface IssuePreset {
   label: string;
   description: string;
@@ -44,8 +49,8 @@ export interface IssuePreset {
   publishes: boolean;
   /** Binding axis — all presets are unbound in M3b; M4 adds "h" etc. */
   bindings: string[];
-  /** Envelope axis — "plain" only in M3b; M4 adds "nip59" / "concord". */
-  envelope: "plain";
+  /** Envelope axis — "plain" sends signed events as-is; "concord" wraps them. */
+  envelope: IssueEnvelope;
   /** Expected-client links offered after a successful publish. */
   clientLinks: ClientLink[];
   /** Input fields rendered when the preset is selected (M4a). */
@@ -54,6 +59,11 @@ export interface IssuePreset {
   wire?: IssueWireMode;
   /** Set to render the preset unselectable (announces future presets). */
   disabledReason?: string;
+  /**
+   * Render a "mint a fresh channel" button that fills the channel
+   * coordinate params (channelId/channelKey/epoch) with random values.
+   */
+  mintableChannel?: boolean;
 }
 
 /** Issue presets; ids are stored on IssueRecord.preset. */
@@ -200,6 +210,35 @@ export const ISSUE_PRESETS = {
     ],
     wire: "nip29-chat",
   },
+  concord: {
+    label: "Concord チャンネル (rumor→seal→wrap)",
+    description:
+      "署名済みイベントを Concord エンベロープ (kind 1059 wrap) に包んで発行します。Armada 等の Concord クライアント向け — 公開 reader が無いため、現状の検証は往復復号とリレー到達確認のみです。チャンネル鍵は発行レコードに保存されません。",
+    publishes: true,
+    bindings: ["channel"],
+    envelope: "concord",
+    clientLinks: [],
+    params: [
+      {
+        key: "channelId",
+        label: "チャンネル ID (hex)",
+        placeholder: "64文字のhex",
+      },
+      {
+        key: "channelKey",
+        label: "チャンネル鍵 (hex・レコードに記録されません)",
+        placeholder: "64文字のhex",
+        secret: true,
+      },
+      {
+        key: "epoch",
+        label: "エポック",
+        placeholder: "0",
+        defaultValue: "0",
+      },
+    ],
+    mintableChannel: true,
+  },
   "channel-bind": {
     label: "チャンネル束縛 (予定)",
     description: "channel+epoch 束縛での発行プリセット。",
@@ -227,7 +266,7 @@ export interface IssueRecord {
   preset: string;
   /** Binding axis — reserved for M4, always empty in M3a. */
   bindings: string[];
-  envelope: "plain";
+  envelope: IssueEnvelope;
   /** Relays the signed events were offered to. */
   relays: string[];
   /** kind 11 root event id at issue time (survives later script edits). */
@@ -387,6 +426,8 @@ export function createIssueRecord(input: {
   results: Record<string, "ok" | string>;
   /** Bindings applied by the wire compile (defaults to none). */
   bindings?: string[];
+  /** Envelope the events were sent under (defaults to "plain"). */
+  envelope?: IssueEnvelope;
   /** Non-secret params used for the run (see recordableParams). */
   params?: Record<string, string>;
 }): IssueRecord {
@@ -395,7 +436,7 @@ export function createIssueRecord(input: {
     issuedAt: Math.floor(Date.now() / 1000),
     preset: input.preset,
     bindings: [...(input.bindings ?? [])],
-    envelope: "plain",
+    envelope: input.envelope ?? "plain",
     relays: [...input.relays],
     ...(input.rootId ? { rootId: input.rootId } : {}),
     ...(input.params ? { params: { ...input.params } } : {}),
@@ -415,7 +456,7 @@ export function recordableParams(
   const out: Record<string, string> = {};
   for (const param of preset.params) {
     if (param.secret) continue;
-    const value = values[param.key]?.trim();
+    const value = values[param.key]?.trim() || param.defaultValue;
     if (value) out[param.key] = value;
   }
   return Object.keys(out).length > 0 ? out : undefined;

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { NostrEvent } from "nostr-tools";
+import { getPublicKey, type NostrEvent } from "nostr-tools";
 import { X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -31,12 +31,15 @@ import {
   type IssueRecord,
   type PublishOutcome,
 } from "@/lib/talkscript/issue";
-import { personaCanSign } from "@/lib/talkscript/keys";
+import { personaCanSign, decodeSecretKey } from "@/lib/talkscript/keys";
 import {
   compileWire,
+  NO_KEY_REASON,
   publishWire,
   signWireEvents,
 } from "@/lib/talkscript/wire";
+import { buildRumor, sealRumor, wrapSeal } from "@/lib/concord/envelope";
+import { deriveChannelStream, mintChannel } from "@/lib/concord/derive";
 import type { CompiledTalk, TalkScript } from "@/lib/talkscript/types";
 import { eventStore, pool } from "@/services/nostr";
 
@@ -90,6 +93,13 @@ function IssueDialogBody({
   // root id of the last run — for wire presets this is the wire-compiled
   // root, not the canonical IR root
   const [issuedRootId, setIssuedRootId] = useState<string | undefined>();
+  // concord channel coordinate used by the last run — shown once so the
+  // user can hand it to readers (the secret key is never persisted)
+  const [channelInfo, setChannelInfo] = useState<{
+    channelId: string;
+    channelKey: string;
+    epoch: string;
+  } | null>(null);
 
   const presetDef: IssuePreset = ISSUE_PRESETS[preset];
   const isWire = presetDef.wire !== undefined;
@@ -97,8 +107,8 @@ function IssueDialogBody({
   const targets = compiled?.events.filter((e) => signedIds.has(e.id)) ?? [];
   const unsigned = compiled?.events.filter((e) => !signedIds.has(e.id)) ?? [];
 
-  const paramsFilled = (presetDef.params ?? []).every((param) =>
-    paramValues[param.key]?.trim(),
+  const paramsFilled = (presetDef.params ?? []).every(
+    (param) => paramValues[param.key]?.trim() || param.defaultValue,
   );
 
   const signablePersonas = useMemo(
@@ -128,10 +138,15 @@ function IssueDialogBody({
     script.personas.find((p) => p.id === personaId)?.name ?? personaId;
 
   // captured once per dialog open (body remounts on open); only events
-  // that will actually be sent count toward the warning
+  // that will actually be sent count toward the warning — concord wraps
+  // randomize the on-wire created_at, so IR times never reach the relay
   const [openedAtSec] = useState(() => Math.floor(Date.now() / 1000));
   const futureCount = (
-    isWire ? wireSignable.map((w) => w.draft) : targets
+    presetDef.envelope === "concord"
+      ? []
+      : isWire
+        ? wireSignable.map((w) => w.draft)
+        : targets
   ).filter((e) => e.created_at > openedAtSec + 15 * 60).length;
 
   const updateRelays = (next: string[]) => {
@@ -156,7 +171,8 @@ function IssueDialogBody({
     !running &&
     presetDef.publishes &&
     relays.length > 0 &&
-    (isWire ? compiled !== null && paramsFilled : targets.length > 0);
+    paramsFilled &&
+    (isWire ? compiled !== null : targets.length > 0);
 
   const run = async () => {
     if (!canExecute || !presetDef) return;
@@ -164,7 +180,83 @@ function IssueDialogBody({
     setOutcome(null);
     setRows([]);
     setRunError(null);
+    setChannelInfo(null);
     try {
+      if (presetDef.envelope === "concord") {
+        // concord: wrap each signed IR event in rumor/seal/wrap — the
+        // wrap is the only event a relay sees, so results key by wrap id
+        const channelId = paramValues.channelId?.trim() ?? "";
+        const channelKey = paramValues.channelKey?.trim() ?? "";
+        const epoch = paramValues.epoch?.trim() || "0";
+        const stream = deriveChannelStream({
+          channelIdHex: channelId,
+          channelKeyHex: channelKey,
+          epoch,
+        });
+        // deriveChannelStream already validated the decimal string
+        const epochN = BigInt(epoch);
+
+        // persona pubkey -> held secret key, for sealing each rumor
+        const skByPubkey = new Map<string, Uint8Array>();
+        for (const persona of script.personas) {
+          if (!persona.key?.trim()) continue;
+          try {
+            const sk = decodeSecretKey(persona.key);
+            skByPubkey.set(getPublicKey(sk), sk);
+          } catch {
+            // undecodable key: this persona's events fail with NO_KEY_REASON
+          }
+        }
+
+        const wraps: NostrEvent[] = [];
+        const failures: Record<string, string> = {};
+        const resultRows: ResultRow[] = [];
+        for (const draft of targets) {
+          const rumor = buildRumor(draft, channelId, epochN);
+          const signerKey = skByPubkey.get(rumor.pubkey);
+          if (!signerKey) {
+            failures[rumor.id] = NO_KEY_REASON;
+            resultRows.push({
+              id: rumor.id,
+              kind: rumor.kind,
+              skippedReason: NO_KEY_REASON,
+            });
+            continue;
+          }
+          const wrap = wrapSeal(sealRumor(rumor, stream, signerKey), stream);
+          wraps.push(wrap);
+          resultRows.push({
+            id: wrap.id,
+            kind: wrap.kind,
+            note: `rumor ${rumor.id.slice(0, 12)}… の wrap`,
+          });
+        }
+        for (const d of unsigned) {
+          resultRows.push({
+            id: d.id,
+            kind: d.kind,
+            skippedReason: "未署名スキップ",
+          });
+        }
+        const published = await publishToRelays(wraps, relays, (rs, ev) =>
+          pool.publish(rs, ev),
+        );
+        setOutcome(published);
+        setRows(resultRows);
+        setChannelInfo({ channelId, channelKey, epoch });
+        onIssued(
+          createIssueRecord({
+            preset,
+            relays,
+            bindings: presetDef.bindings,
+            envelope: "concord",
+            params: recordableParams(presetDef, paramValues),
+            results: { ...failures, ...aggregateResults(published) },
+          }),
+        );
+        return;
+      }
+
       if (presetDef.wire) {
         // wire presets re-compile a dedicated event set from the script
         // and sign it with the persona keys here — the signed canonical
@@ -333,6 +425,25 @@ function IssueDialogBody({
         </div>
       ))}
 
+      {presetDef.mintableChannel && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            const minted = mintChannel();
+            setParamValues((values) => ({
+              ...values,
+              channelId: minted.channelId,
+              channelKey: minted.channelKey,
+              epoch: String(minted.epoch),
+            }));
+          }}
+          disabled={running}
+        >
+          新規チャンネル発行（乱数生成）
+        </Button>
+      )}
+
       {ISSUE_PRESETS[preset].publishes && (
         <div className="space-y-2">
           <Label>発行先リレー ({relays.length})</Label>
@@ -473,6 +584,27 @@ function IssueDialogBody({
                 </li>
               ))}
             </ul>
+          )}
+          {channelInfo && (
+            <div className="space-y-1 rounded border p-2">
+              <Label>チャンネル情報（読み側への共有用）</Label>
+              <p className="text-xs text-muted-foreground">
+                チャンネル鍵は発行レコードに保存されません。他端末・読み側に渡す場合はここから控えてください。
+              </p>
+              <div className="text-xs font-mono space-y-0.5">
+                <div>
+                  channelId:{" "}
+                  <span className="select-all">{channelInfo.channelId}</span>
+                </div>
+                <div>
+                  channelKey:{" "}
+                  <span className="select-all">{channelInfo.channelKey}</span>
+                </div>
+                <div>
+                  epoch: <span className="select-all">{channelInfo.epoch}</span>
+                </div>
+              </div>
+            </div>
           )}
           <p className="text-xs text-muted-foreground">
             発行レコードを台本に追記しました。
