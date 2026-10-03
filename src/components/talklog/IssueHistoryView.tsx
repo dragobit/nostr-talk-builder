@@ -1,5 +1,7 @@
-import { ExternalLink } from "lucide-react";
+import { useState } from "react";
+import { ExternalLink, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -7,19 +9,53 @@ import {
   issueLinks,
   type IssueRecord,
 } from "@/lib/talkscript/issue";
+import {
+  reissueRecord,
+  resendBlockReason,
+  type ReissueResult,
+} from "@/lib/talkscript/reissue";
+import type { TalkScript } from "@/lib/talkscript/types";
+import { eventStore, pool } from "@/services/nostr";
 import { formatTime } from "./utils";
 
 interface Props {
-  issues?: IssueRecord[];
+  script: TalkScript;
+  /** Called with the new record after a resend completes. */
+  onResent: (result: ReissueResult) => void;
 }
 
 /**
  * Issuance history: one card per IssueRecord, newest first. Each shows
  * when it ran, the preset, relay count, ok/failure counts, and — for
- * records with a rootId — the preset's client links.
+ * records with a rootId — the preset's client links. Eligible records
+ * (plain, unbound, fully-signable) offer a resend action.
  */
-export function IssueHistoryView({ issues }: Props) {
-  const records = [...(issues ?? [])].reverse();
+export function IssueHistoryView({ script, onResent }: Props) {
+  const records = [...(script.issues ?? [])].reverse();
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [resendError, setResendError] = useState<{
+    id: string;
+    message: string;
+  } | null>(null);
+
+  const resend = async (record: IssueRecord) => {
+    setResendingId(record.id);
+    setResendError(null);
+    try {
+      const result = await reissueRecord(script, record, (relays, event) =>
+        pool.publish(relays, event),
+      );
+      for (const event of result.events) eventStore.add(event);
+      onResent(result);
+    } catch (error) {
+      setResendError({
+        id: record.id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setResendingId(null);
+    }
+  };
 
   return (
     <Card className="h-full">
@@ -49,6 +85,8 @@ export function IssueHistoryView({ issues }: Props) {
                   { ok: 0, failed: 0 },
                 );
                 const links = issueLinks(record);
+                const blockReason = resendBlockReason(script, record);
+                const busy = resendingId === record.id;
                 return (
                   <li
                     key={record.id}
@@ -94,6 +132,32 @@ export function IssueHistoryView({ issues }: Props) {
                           </li>
                         ))}
                       </ul>
+                    )}
+                    <div className="flex items-center gap-2 pt-0.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6 text-xs px-2"
+                        disabled={blockReason !== null || resendingId !== null}
+                        onClick={() => void resend(record)}
+                        title={
+                          blockReason ??
+                          "台本を再コンパイル・再署名して同じリレーに送信します"
+                        }
+                      >
+                        <Send className="h-3 w-3 mr-1" />
+                        {busy ? "再送信中…" : "再送信"}
+                      </Button>
+                      {blockReason && (
+                        <span className="text-muted-foreground">
+                          {blockReason}
+                        </span>
+                      )}
+                    </div>
+                    {resendError?.id === record.id && (
+                      <p className="text-destructive">
+                        再送信に失敗しました: {resendError.message}
+                      </p>
                     )}
                   </li>
                 );
